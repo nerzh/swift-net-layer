@@ -11,7 +11,7 @@ import SwiftExtensionsPack
 import FoundationNetworking
 #endif
 
-public protocol SNLProviderPrtcl {
+public protocol SNLProviderPrtcl: Sendable {
     
     init()
     

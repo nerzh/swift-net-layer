@@ -7,7 +7,7 @@
 
 import Foundation
 
-open class SNLProvider: SNLProviderPrtcl {
+public final class SNLProvider: SNLProviderPrtcl {
 
     required public init() {}
 }

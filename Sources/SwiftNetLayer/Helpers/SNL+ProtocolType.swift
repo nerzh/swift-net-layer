@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum SNLProtocolType: String, CustomStringConvertible {
+public enum SNLProtocolType: String, CustomStringConvertible, Sendable {
     case http
     case https
 

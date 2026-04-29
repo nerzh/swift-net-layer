@@ -24,13 +24,13 @@ public struct RequestPerSecondOptions {
     }
 }
 
-open class SNLResource: SNLResourcePrtcl {
-    public var provider: SNLProviderPrtcl
-    public var `protocol`: SNLProtocolType
-    public var domain: String
-    public var version: String?
-    public var defaultHeaders: [String: String]?
-    public var defaultParams: [String: Any]?
+open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
+    public let provider: SNLProviderPrtcl
+    public let `protocol`: SNLProtocolType
+    public let domain: String
+    public let version: String?
+    public let defaultHeaders: [String: String]?
+    public let defaultParams: SafeValue<[String: Any]?>
     public var url: URL {
         let version = self.version != nil ? "/\(self.version!)" : ""
         guard let url = URL(string: "\(`protocol`)://\(domain)\(version)") else { fatalError("NetResource: Bad URL") }
@@ -38,7 +38,7 @@ open class SNLResource: SNLResourcePrtcl {
     }
     
     /// Request Per Second WatchDog
-    public var requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? = nil
+    public let requestPerSecondOptions: SafeValue<RequestPerSecondOptions>?
     public var allowRequest: Bool {
         guard let requestPerSecondOptions else { return true }
         let currentTime: UInt = Date().toSeconds()
@@ -71,7 +71,7 @@ open class SNLResource: SNLResourcePrtcl {
         self.domain = domain
         self.version = version
         self.defaultHeaders = defaultHeaders
-        self.defaultParams = defaultParams
+        self.defaultParams = .init(defaultParams)
         self.requestPerSecondOptions = requestPerSecondOptions
     }
 }

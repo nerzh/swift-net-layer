@@ -8,16 +8,16 @@
 import Foundation
 import SwiftExtensionsPack
 
-public protocol SNLResourcePrtcl {
+public protocol SNLResourcePrtcl: Sendable {
 
-    var provider: SNLProviderPrtcl { get set }
-    var `protocol`: SNLProtocolType { get set }
-    var domain: String { get set }
-    var version: String? { get set }
-    var defaultHeaders: [String: String]? { get set }
-    var defaultParams: [String: Any]? { get set }
+    var provider: SNLProviderPrtcl { get }
+    var `protocol`: SNLProtocolType { get }
+    var domain: String { get }
+    var version: String? { get }
+    var defaultHeaders: [String: String]? { get }
+    var defaultParams: SafeValue<[String: Any]?> { get }
     var url: URL { get }
-    var requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? { get set }
+    var requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? { get }
     var allowRequest: Bool { get }
 }
 
@@ -29,3 +29,4 @@ public extension SNLResourcePrtcl {
         return url
     }
 }
+

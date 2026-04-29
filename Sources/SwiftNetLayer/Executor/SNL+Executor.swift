@@ -160,7 +160,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
 
     private func makeRequest() -> SNLRequestPrtcl {
         let mergedHeaders = mergeHeaders(resource.defaultHeaders, targetHeaders, requestHeaders)
-        let mergedParams = mergeParams(resource.defaultParams, targetParams, requestParams)
+        let mergedParams = mergeParams(resource.defaultParams.value, targetParams, requestParams)
 
         return SNLRequest(method: method,
                           path: path,
