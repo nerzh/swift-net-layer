@@ -196,7 +196,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         guard let requestPerSecondOptions = resource.requestPerSecondOptions else { return }
         let delayBeforRetryRequest = requestPerSecondOptions.value.retryDelaySecond
         while !resource.allowRequest {
-            usleep(delayBeforRetryRequest / 1000)
+            Thread.sleep(forTimeInterval: TimeInterval(delayBeforRetryRequest) / 1_000_000_000)
         }
     }
     
@@ -208,5 +208,4 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         }
     }
 }
-
 
