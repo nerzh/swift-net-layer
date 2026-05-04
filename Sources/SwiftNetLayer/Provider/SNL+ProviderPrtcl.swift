@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftExtensionsPack
+import SwiftRegularExpression
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -29,7 +30,6 @@ public protocol SNLProviderPrtcl: Sendable {
 
 
 // MARK: Default Realisation NetProviderPrtcl
-
 public extension SNLProviderPrtcl {
     
     private func fullURL(_ resource: SNLResourcePrtcl, _ request: SNLRequestPrtcl) -> URL {
