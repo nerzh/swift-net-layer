@@ -41,21 +41,23 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
     public let requestPerSecondOptions: SafeValue<RequestPerSecondOptions>?
     public var allowRequest: Bool {
         guard let requestPerSecondOptions else { return true }
-        let currentTime: UInt = Date().toSeconds()
-        var allow: Bool = false
-        let range = currentTime - requestPerSecondOptions.value.lastRequestTime
-        if range >= requestPerSecondOptions.value.timeRangeLimitSecond {
-            requestPerSecondOptions.change { $0.lastRequestTime = currentTime }
-            requestPerSecondOptions.change { $0.requestCounter = 1 }
-            allow = true
+        return requestPerSecondOptions.change { options in
+            let currentTime: UInt = Date().toSeconds()
+            var allow: Bool = false
+            let range = currentTime - options.lastRequestTime
+            if range >= options.timeRangeLimitSecond {
+                options.lastRequestTime = currentTime
+                options.requestCounter = 1
+                allow = true
+            }
+            if options.requestCounter < options.requestLimit {
+                options.requestCounter += 1
+                allow = true
+            } else {
+                allow = false
+            }
+            return allow
         }
-        if requestPerSecondOptions.value.requestCounter < requestPerSecondOptions.value.requestLimit {
-            requestPerSecondOptions.change { $0.requestCounter += 1 }
-            allow = true
-        } else {
-            allow = false
-        }
-        return allow
     }
 
     public init(provider: SNLProviderPrtcl = SNLProvider(),
