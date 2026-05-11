@@ -62,17 +62,9 @@ public extension SNLProviderPrtcl {
             sessionConfiguration.timeoutIntervalForResource = request.timeoutIntervalForResource ?? 0
             sharedSession = URLSession(configuration: sessionConfiguration)
         }
-        let callback = { @Sendable (data: Data?, urlResponse: URLResponse?, error: Error?) -> Void in
-            if let error {
-                try handler(data, urlResponse, SNLError(String(describing: error)))
-            } else {
-                try handler(data, urlResponse, nil)
-            }
-        }
         
-        if debug {
-            printDebugInfo(resource: resource, request: request, params: newParams)
-        }
+        let safeRequest = SafeValue(request)
+        let safeParams = SafeValue(newParams)
         
         try Net.sendRequest(url: fullURL(resource, request).absoluteString,
                             method: request.method.rawValue.uppercased(),
@@ -81,7 +73,26 @@ public extension SNLProviderPrtcl {
                             body: request.body,
                             multipart: request.multipart,
                             session: sharedSession ?? nil,
-                            callback)
+                            beforeResume: nil,
+                            afterResume: nil
+        ) { (data: Data?, urlResponse: URLResponse?, error: Error?) in
+            if
+                debug,
+                let data, let urlResponse
+            {
+                printDebugInfo(
+                    resource: resource,
+                    request: safeRequest.value,
+                    params: safeParams.value,
+                    response: (data: data, response: urlResponse)
+                )
+            }
+            if let error {
+                try handler(data, urlResponse, SNLError(String(describing: error)))
+            } else {
+                try handler(data, urlResponse, nil)
+            }
+        }
     }
     
     @discardableResult
@@ -105,17 +116,19 @@ public extension SNLProviderPrtcl {
             sharedSession = URLSession(configuration: sessionConfiguration)
         }
         
+        let response = try await Net.sendRequest(url: fullURL(resource, request).absoluteString,
+                                                 method: request.method.rawValue.uppercased(),
+                                                 headers: request.headers,
+                                                 params: newParams,
+                                                 body: request.body,
+                                                 multipart: request.multipart,
+                                                 session: sharedSession ?? nil)
+        
         if debug {
-            printDebugInfo(resource: resource, request: request, params: newParams)
+            printDebugInfo(resource: resource, request: request, params: newParams, response: response)
         }
         
-        return try await Net.sendRequest(url: fullURL(resource, request).absoluteString,
-                                         method: request.method.rawValue.uppercased(),
-                                         headers: request.headers,
-                                         params: newParams,
-                                         body: request.body,
-                                         multipart: request.multipart,
-                                         session: sharedSession ?? nil)
+        return response
     }
     
     private func changeToSessionFiles<T>(_ anyObject: T) -> T {
@@ -143,12 +156,21 @@ public extension SNLProviderPrtcl {
         return checkValue(anyObject as AnyObject) as! T
     }
     
-    private func printDebugInfo(resource: SNLResourcePrtcl, request: SNLRequestPrtcl, params: [String: Any]) {
+    private func printDebugInfo(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        params: [String: Any],
+        response: (data: Data, response: URLResponse)
+    ) {
+        print("SWIFT-NET-LAYER: Request")
         print("SWIFT-NET-LAYER: url \(fullURL(resource, request).absoluteString)")
         print("SWIFT-NET-LAYER: method \(request.method.rawValue.uppercased())")
         print("SWIFT-NET-LAYER: headers \(request.headers ?? [:])")
         print("SWIFT-NET-LAYER: params \(params)")
-        print("SWIFT-NET-LAYER: body \(request.body?.toJson ?? "")")
+        print("SWIFT-NET-LAYER: body \(String(describing: String(data: request.body ?? Data(), encoding: .utf8)))")
         print("SWIFT-NET-LAYER: multipart \(request.multipart)")
+        print("SWIFT-NET-LAYER: Response")
+        print("SWIFT-NET-LAYER: body \(String(describing: String(data: response.data, encoding: .utf8)))")
+        print("SWIFT-NET-LAYER: URLResponse \(response.response.debugDescription)")
     }
 }
