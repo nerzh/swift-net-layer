@@ -37,7 +37,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         try execute(debug: false, handler)
     }
 
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type,
+    public func execute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
                                                   debug: Bool,
                                                   _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
@@ -52,17 +52,17 @@ public struct SNLExecutor: SNLExecutorPrtcl {
                 }
                 let object = try JSONDecoder().decode(model, from: data)
                 if let error {
-                    try handler(object, response, SNLError(String(describing: error)))
+                    try handler(object, response, SNLError(error))
                 } else {
                     try handler(object, response, nil)
                 }
             } catch let error {
-                try? handler(nil, response, SNLError(String(describing: error)))
+                try? handler(nil, response, SNLError(error))
             }
         }
     }
     
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type,
+    public func execute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
                                                   _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         try execute(model: model, debug: false, handler)
@@ -106,7 +106,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
             return (object, out.1)
         } catch {
             let dataString: String? = String(data: data, encoding: .utf8)
-            throw SNLError("\(dataString ?? "") \(String(describing: error))")
+            throw SNLError("\(dataString ?? "") \(SNLError(error).description)")
         }
     }
     
@@ -139,7 +139,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         try waitExecute(debug: false, handler)
     }
 
-    public func waitExecute<ResponseModel: Decodable>(model: ResponseModel.Type,
+    public func waitExecute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
                                                       debug: Bool,
                                                       _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
@@ -152,7 +152,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         waitGroup.wait()
     }
     
-    public func waitExecute<ResponseModel: Decodable>(model: ResponseModel.Type,
+    public func waitExecute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
                                                       _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         try waitExecute(model: model, debug: false, handler)

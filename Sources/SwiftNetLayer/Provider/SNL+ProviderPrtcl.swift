@@ -88,7 +88,7 @@ public extension SNLProviderPrtcl {
                 )
             }
             if let error {
-                try handler(data, urlResponse, SNLError(String(describing: error)))
+                try handler(data, urlResponse, SNLError(error))
             } else {
                 try handler(data, urlResponse, nil)
             }
