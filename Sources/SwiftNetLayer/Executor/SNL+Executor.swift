@@ -36,10 +36,11 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     public func execute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
         try execute(debug: false, handler)
     }
-
-    public func execute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
-                                                  debug: Bool,
-                                                  _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    
+    public func execute<ResponseModel: Decodable & Sendable>(
+        model: ResponseModel.Type,
+        debug: Bool,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         awaitAvailableSlotForRequest()
         let provider = resource.provider
@@ -62,8 +63,9 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         }
     }
     
-    public func execute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
-                                                  _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    public func execute<ResponseModel: Decodable & Sendable>(
+        model: ResponseModel.Type,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         try execute(model: model, debug: false, handler)
     }
@@ -138,10 +140,11 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     public func waitExecute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
         try waitExecute(debug: false, handler)
     }
-
-    public func waitExecute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
-                                                      debug: Bool,
-                                                      _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    
+    public func waitExecute<ResponseModel: Decodable & Sendable>(
+        model: ResponseModel.Type,
+        debug: Bool,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         let waitGroup = DispatchGroup()
         waitGroup.enter()
@@ -152,8 +155,9 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         waitGroup.wait()
     }
     
-    public func waitExecute<ResponseModel: Decodable & Sendable>(model: ResponseModel.Type,
-                                                      _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    public func waitExecute<ResponseModel: Decodable & Sendable>(
+        model: ResponseModel.Type,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
     {
         try waitExecute(model: model, debug: false, handler)
     }
