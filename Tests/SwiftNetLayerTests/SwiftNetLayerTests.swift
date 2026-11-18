@@ -128,14 +128,17 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
     }
 
     func testContentTypeAndHeaderOverridesArePreserved() async throws {
+        let contentType = SNLHeaderName.contentType.rawValue
+        let levelHeader = SNLHeaderName.custom("X-Level").rawValue
+        let resourceHeader = SNLHeaderName.custom("X-Resource").description
         let resource = SNLResource(
             provider: makeProvider(), domain: "swift-net-layer.test",
-            defaultHeaders: ["Content-Type": "application/json", "X-Level": "resource", "X-Resource": "yes"]
+            defaultHeaders: [contentType: "application/json", levelHeader: "resource", resourceHeader: "yes"]
         )
-        let target = SNLTarget(resource: resource, path: "/headers", headers: ["X-Level": "target"])
+        let target = SNLTarget(resource: resource, path: "/headers", headers: [levelHeader: "target"])
         let executor = target.makeExecutor(
             target: target, resource: resource, method: .post,
-            requestHeaders: ["X-Level": "request"]
+            requestHeaders: [levelHeader: "request"]
         )
         let request = try await capture(executor)
         XCTAssertEqual(request.contentType, "application/json")
