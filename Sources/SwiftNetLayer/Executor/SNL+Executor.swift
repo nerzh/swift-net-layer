@@ -80,25 +80,12 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     }
     
     @discardableResult
-    public func execute(debug: Bool) async throws -> Data {
-        try await awaitAvailableSlotForRequest()
-        let provider = resource.provider
-        let request = makeRequest()
-        return try await provider.executeRequest(resource: resource, request: request, debug: debug).body
-    }
-    
-    @discardableResult
     public func execute() async throws -> SNLHTTPResponse {
         try await execute(debug: false)
     }
     
     @discardableResult
-    public func execute() async throws -> Data {
-        try await execute(debug: false).body
-    }
-    
-    @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, SNLHTTPResponse) {
+    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (model: ResponseModel, response: SNLHTTPResponse) {
         try await awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
@@ -106,7 +93,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         let data = out.body
         do {
             let object = try JSONDecoder().decode(model, from: data)
-            return (object, out)
+            return (model: object, response: out)
         } catch {
             let dataString: String? = String(data: data, encoding: .utf8)
             throw SNLError("\(dataString ?? "") \(SNLError(error).description)")
@@ -114,18 +101,18 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     }
     
     @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> ResponseModel {
-        try await execute(model: model, debug: debug).0
+    public func modelExecute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> ResponseModel {
+        try await execute(model: model, debug: debug).model
     }
     
     @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, SNLHTTPResponse) {
+    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (model: ResponseModel, response: SNLHTTPResponse) {
         try await execute(model: model, debug: false)
     }
     
     @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> ResponseModel {
-        try await execute(model: model, debug: false).0
+    public func modelExecute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> ResponseModel {
+        try await modelExecute(model: model, debug: false)
     }
 
     public func waitExecute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {

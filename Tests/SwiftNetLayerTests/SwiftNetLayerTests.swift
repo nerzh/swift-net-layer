@@ -211,17 +211,17 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         let target = SNLTarget(resource: resource, path: "/custom-provider")
         let executor = target.makeExecutor(target: target, resource: resource, method: .get)
 
-        let output: (CapturedRequest, SNLHTTPResponse) = try await executor.execute(model: CapturedRequest.self)
-        XCTAssertEqual(try JSONDecoder().decode(CapturedRequest.self, from: output.1.body).url, output.0.url)
-        XCTAssertEqual(output.1.url, target.path)
-        XCTAssertEqual(output.1.statusCode, 200)
-        XCTAssertEqual(output.1.headers[.custom("x-provider")], "custom")
+        let output = try await executor.execute(model: CapturedRequest.self)
+        XCTAssertEqual(try JSONDecoder().decode(CapturedRequest.self, from: output.response.body).url, output.model.url)
+        XCTAssertEqual(output.response.url, target.path)
+        XCTAssertEqual(output.response.statusCode, 200)
+        XCTAssertEqual(output.response.headers[.custom("x-provider")], "custom")
 
         let finished = expectation(description: "Custom provider HTTP response")
         executor.execute(model: CapturedRequest.self) { model, response, error in
             XCTAssertNotNil(model)
             XCTAssertFalse(response?.body.isEmpty ?? true)
-            XCTAssertEqual(response?.url, output.1.url)
+            XCTAssertEqual(response?.url, output.response.url)
             XCTAssertEqual(response?.statusCode, 200)
             XCTAssertEqual(response?.headers[.custom("X-Provider")], "custom")
             XCTAssertNil(error)
@@ -272,7 +272,7 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
                 }
             }
         }
-        return try await executor.execute(model: CapturedRequest.self)
+        return try await executor.modelExecute(model: CapturedRequest.self)
     }
 }
 

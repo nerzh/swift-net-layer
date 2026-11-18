@@ -42,25 +42,19 @@ public protocol SNLExecutorPrtcl {
 
     @discardableResult
     func execute() async throws -> SNLHTTPResponse
-
-    @discardableResult
-    func execute(debug: Bool) async throws -> Data
-
-    @discardableResult
-    func execute() async throws -> Data
     
 
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, SNLHTTPResponse)
+    func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (model: ResponseModel, response: SNLHTTPResponse)
 
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> ResponseModel
+    func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (model: ResponseModel, response: SNLHTTPResponse)
 
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, SNLHTTPResponse)
+    func modelExecute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> ResponseModel
 
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> ResponseModel
+    func modelExecute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> ResponseModel
     
 
     func waitExecute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void)

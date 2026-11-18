@@ -13,9 +13,6 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
 
         for statusCode in [300, 400, 401, 404, 429, 500, 503] {
             let executor = makeHTTPStatusExecutor(session: session, path: "/\(statusCode)")
-            let data: Data = try await executor.execute()
-            XCTAssertEqual(data, httpStatusValidBody)
-
             let output: SNLHTTPResponse = try await executor.execute()
             XCTAssertEqual(output.body, httpStatusValidBody)
             XCTAssertEqual(output.statusCode, statusCode)
@@ -27,12 +24,12 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
         defer { session.invalidateAndCancel() }
         let executor = makeHTTPStatusExecutor(session: session, path: "/500")
 
-        let model: HTTPStatusPayload = try await executor.execute(model: HTTPStatusPayload.self)
+        let model = try await executor.modelExecute(model: HTTPStatusPayload.self, debug: false)
         XCTAssertEqual(model.value, 42)
-        let output: (HTTPStatusPayload, SNLHTTPResponse) = try await executor.execute(model: HTTPStatusPayload.self)
-        XCTAssertEqual(output.0.value, 42)
-        XCTAssertEqual(output.1.body, httpStatusValidBody)
-        XCTAssertEqual(output.1.statusCode, 500)
+        let output = try await executor.execute(model: HTTPStatusPayload.self, debug: false)
+        XCTAssertEqual(output.model.value, 42)
+        XCTAssertEqual(output.response.body, httpStatusValidBody)
+        XCTAssertEqual(output.response.statusCode, 500)
     }
 
     func testInvalidJSONIsReturnedRawAndFailsOnlyWhenDecoding() async throws {
@@ -45,7 +42,7 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(output.statusCode, 500)
 
         do {
-            let _: HTTPStatusPayload = try await executor.execute(model: HTTPStatusPayload.self)
+            let _: HTTPStatusPayload = try await executor.modelExecute(model: HTTPStatusPayload.self)
             XCTFail("Expected a decoding error")
         } catch {
             XCTAssertNotNil(error as? SNLError)
@@ -112,8 +109,6 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
         for statusCode in [200, 201, 204, 206, 299] {
             let body = statusCode == 204 ? Data() : httpStatusValidBody
             let executor = makeHTTPStatusExecutor(session: session, path: "/\(statusCode)")
-            let data: Data = try await executor.execute()
-            XCTAssertEqual(data, body)
             let output: SNLHTTPResponse = try await executor.execute()
             XCTAssertEqual(output.body, body)
             XCTAssertEqual(output.statusCode, statusCode)
@@ -134,12 +129,12 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
         defer { session.invalidateAndCancel() }
         let executor = makeHTTPStatusExecutor(session: session, path: "/201")
 
-        let model: HTTPStatusPayload = try await executor.execute(model: HTTPStatusPayload.self)
+        let model = try await executor.modelExecute(model: HTTPStatusPayload.self)
         XCTAssertEqual(model.value, 42)
-        let output: (HTTPStatusPayload, SNLHTTPResponse) = try await executor.execute(model: HTTPStatusPayload.self)
-        XCTAssertEqual(output.0.value, 42)
-        XCTAssertEqual(output.1.body, httpStatusValidBody)
-        XCTAssertEqual(output.1.statusCode, 201)
+        let output = try await executor.execute(model: HTTPStatusPayload.self)
+        XCTAssertEqual(output.model.value, 42)
+        XCTAssertEqual(output.response.body, httpStatusValidBody)
+        XCTAssertEqual(output.response.statusCode, 201)
 
         let finished = expectation(description: "Successful model callback")
         executor.execute(model: HTTPStatusPayload.self) { model, response, error in
@@ -194,7 +189,7 @@ final class HTTPStatusTests: XCTestCase, @unchecked Sendable {
         let executor = makeHTTPStatusExecutor(session: session, path: "/transport-error")
 
         do {
-            let _: Data = try await executor.execute()
+            let _: SNLHTTPResponse = try await executor.execute()
             XCTFail("Expected a transport error")
         } catch {
             XCTAssertEqual((error as? URLError)?.code, .notConnectedToInternet)
