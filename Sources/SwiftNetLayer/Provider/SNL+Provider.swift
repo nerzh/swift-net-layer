@@ -46,7 +46,7 @@ public final class SNLProvider: SNLProviderPrtcl {
 
         try Net.sendRequest(url: fullURL(resource, request).absoluteString,
                             method: request.method.rawValue.uppercased(),
-                            headers: request.headers,
+                            headers: makeNetHeaders(request.headers),
                             queryParams: request.params,
                             body: makeNetBody(request.body),
                             session: session ?? self.session,
@@ -82,7 +82,7 @@ public final class SNLProvider: SNLProviderPrtcl {
 
         let response = try await Net.sendRequest(url: fullURL(resource, request).absoluteString,
                                                  method: request.method.rawValue.uppercased(),
-                                                 headers: request.headers,
+                                                 headers: makeNetHeaders(request.headers),
                                                  queryParams: request.params,
                                                  body: makeNetBody(request.body),
                                                  session: session ?? self.session)
@@ -92,6 +92,11 @@ public final class SNLProvider: SNLProviderPrtcl {
         }
 
         return response
+    }
+
+    private func makeNetHeaders(_ headers: SNLHeader?) -> [String: String]? {
+        guard let headers else { return nil }
+        return Dictionary(uniqueKeysWithValues: headers.map { ($0.key.rawValue, $0.value) })
     }
 
     private func makeNetBody(_ body: SNLBody?) -> NetBody? {

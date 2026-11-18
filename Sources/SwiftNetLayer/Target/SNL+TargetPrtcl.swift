@@ -12,13 +12,13 @@ public protocol SNLTargetPrtcl {
     var resource: SNLResourcePrtcl { get set }
     /// /users/:id
     var path: URL { get set }
-    var headers: [String: String]? { get set }
+    var headers: SNLHeader? { get set }
     var params: [String: Any]? { get set }
 
     init(
         resource: SNLResourcePrtcl,
         path: String,
-        headers: [String: String]?,
+        headers: SNLHeader?,
         params: [String: Any]?
     )
 

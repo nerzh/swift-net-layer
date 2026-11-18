@@ -128,30 +128,59 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
     }
 
     func testContentTypeAndHeaderOverridesArePreserved() async throws {
-        let contentType = SNLHeaderName.contentType.rawValue
-        let levelHeader = SNLHeaderName.custom("X-Level").rawValue
-        let resourceHeader = SNLHeaderName.custom("X-Resource").description
         let resource = SNLResource(
             provider: makeProvider(), domain: "swift-net-layer.test",
-            defaultHeaders: [contentType: "application/json", levelHeader: "resource", resourceHeader: "yes"]
+            defaultHeaders: [
+                .contentType: "text/plain",
+                .authorization: "Bearer AbCd",
+                .custom("X-Level"): "resource",
+                .custom("X-Target"): "resource",
+                .custom("X-Resource"): "yes"
+            ]
         )
-        let target = SNLTarget(resource: resource, path: "/headers", headers: [levelHeader: "target"])
+        let target = SNLTarget(
+            resource: resource, path: "/headers",
+            headers: [
+                .custom("content-TYPE"): "application/xml",
+                .custom("x-level"): "target",
+                .custom("x-target"): "target"
+            ]
+        )
         let executor = target.makeExecutor(
             target: target, resource: resource, method: .post,
-            requestHeaders: [levelHeader: "request"]
+            requestHeaders: [.contentType: "application/json", .custom("X-LEVEL"): "request"]
         )
-        let request = try await capture(executor)
-        XCTAssertEqual(request.contentType, "application/json")
-        XCTAssertEqual(request.headers["x-level"], "request")
-        XCTAssertEqual(request.headers["x-resource"], "yes")
-        XCTAssertTrue(request.body.isEmpty)
+        for callback in [false, true] {
+            let request = try await capture(executor, callback: callback)
+            XCTAssertEqual(request.contentType, "application/json")
+            XCTAssertEqual(request.headers["authorization"], "Bearer AbCd")
+            XCTAssertEqual(request.headers["x-level"], "request")
+            XCTAssertEqual(request.headers["x-target"], "target")
+            XCTAssertEqual(request.headers["x-resource"], "yes")
+            XCTAssertTrue(request.body.isEmpty)
+        }
+    }
+
+    func testHeaderKeysMatchWithoutCaseSensitivity() {
+        var headers: SNLHeader = [.contentType: "text/plain", .custom("X-Trace-ID"): "first"]
+        headers[.custom("CONTENT-TYPE")] = "application/json"
+        headers[.custom("x-trace-id")] = "second"
+
+        XCTAssertEqual(headers.count, 2)
+        XCTAssertEqual(headers[.contentType], "application/json")
+        XCTAssertEqual(headers[.custom("content-type")], "application/json")
+        XCTAssertEqual(headers[.custom("X-TRACE-ID")], "second")
+        XCTAssertNil(headers[.accept])
+        XCTAssertEqual(SNLHeaderName.authorization, .custom("AUTHORIZATION"))
+        XCTAssertNotEqual(SNLHeaderName.authorization, .proxyAuthorization)
+        XCTAssertEqual(SNLHeaderName.custom("X-Trace-ID").rawValue, "X-Trace-ID")
     }
 
     func testConflictingContentTypeFailsForAsyncAndCallbackRequests() async throws {
         let target = SNLTarget(resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test"), path: "/conflict")
         let executor = target.makeExecutor(
             target: target, resource: target.resource, method: .post,
-            requestHeaders: ["Content-Type": "text/plain"], body: .json(Payload(name: "Ada", count: 1))
+            requestHeaders: [.contentType: "text/plain"], body: .json(Payload(name: "Ada", count: 1))
         )
         for callback in [false, true] {
             do {
@@ -182,11 +211,13 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         let target = SNLTarget(resource: resource, path: "/custom-provider")
         let payload = Payload(name: "Independent provider", count: 3)
         let executor = target.makeExecutor(
-            target: target, resource: resource, method: .post, body: .json(payload)
+            target: target, resource: resource, method: .post,
+            requestHeaders: [.custom("AUTHORIZATION"): "Bearer independent"], body: .json(payload)
         )
         for callback in [false, true] {
             let request = try await capture(executor, callback: callback)
             XCTAssertEqual(try JSONDecoder().decode(Payload.self, from: request.body), payload)
+            XCTAssertEqual(request.headers["authorization"], "Bearer independent")
         }
     }
 
@@ -319,7 +350,8 @@ private struct TimeoutProvider: SNLProviderPrtcl {
             url: request.path.absoluteString, method: request.method.description,
             headers: [
                 "request-timeout": request.timeoutIntervalForRequest.map(String.init(describing:)) ?? "nil",
-                "resource-timeout": request.timeoutIntervalForResource.map(String.init(describing:)) ?? "nil"
+                "resource-timeout": request.timeoutIntervalForResource.map(String.init(describing:)) ?? "nil",
+                "authorization": request.headers?[.authorization] ?? "nil"
             ], body: body
         )
         let response = URLResponse(url: request.path, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)

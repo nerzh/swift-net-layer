@@ -88,4 +88,12 @@ public enum SNLHeaderName: Hashable, Sendable, CustomStringConvertible {
     }
 
     public var description: String { self.rawValue }
+
+    public static func == (lhs: SNLHeaderName, rhs: SNLHeaderName) -> Bool {
+        lhs.rawValue.lowercased() == rhs.rawValue.lowercased()
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rawValue.lowercased())
+    }
 }

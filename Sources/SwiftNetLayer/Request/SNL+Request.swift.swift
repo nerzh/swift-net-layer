@@ -11,7 +11,7 @@ import SwiftRegularExpression
 public struct SNLRequest: SNLRequestPrtcl {
     
     public var method: SNLHTTPMethod
-    public var headers: [String: String]?
+    public var headers: SNLHeader?
     public var params: [String: Any]?
     public var hash: String?
     public var body: SNLBody?
@@ -34,7 +34,7 @@ public struct SNLRequest: SNLRequestPrtcl {
         method: SNLHTTPMethod,
         path: URL,
         dynamicPathsParts: [String: String]?,
-        headers: [String: String]? = nil,
+        headers: SNLHeader? = nil,
         params: [String: Any]? = nil,
         hash: String? = nil,
         body: SNLBody? = nil,

@@ -29,7 +29,7 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
     public let `protocol`: SNLProtocolType
     public let domain: String
     public let version: String?
-    public let defaultHeaders: [String: String]?
+    public let defaultHeaders: SNLHeader?
     public let defaultParams: SafeValue<[String: Any]?>
     public var url: URL {
         let version = self.version != nil ? "/\(self.version!)" : ""
@@ -65,7 +65,7 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
         protocol: SNLProtocolType = .http,
         domain: String,
         version: String? = nil,
-        defaultHeaders: [String: String]? = nil,
+        defaultHeaders: SNLHeader? = nil,
         defaultParams: [String: Any]? = nil,
         requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? = nil
     ) {

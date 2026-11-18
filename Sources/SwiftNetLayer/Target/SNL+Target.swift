@@ -12,13 +12,13 @@ open class SNLTarget: SNLTargetPrtcl {
 
     public var resource: SNLResourcePrtcl
     public var path: URL
-    public var headers: [String: String]?
+    public var headers: SNLHeader?
     public var params: [String: Any]?
 
     required public init(
         resource: SNLResourcePrtcl,
         path: String,
-        headers: [String: String]? = nil,
+        headers: SNLHeader? = nil,
         params: [String: Any]? = nil
     ) {
         self.resource = resource

@@ -14,7 +14,7 @@ public protocol SNLResourcePrtcl: Sendable {
     var `protocol`: SNLProtocolType { get }
     var domain: String { get }
     var version: String? { get }
-    var defaultHeaders: [String: String]? { get }
+    var defaultHeaders: SNLHeader? { get }
     var defaultParams: SafeValue<[String: Any]?> { get }
     var url: URL { get }
     var requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? { get }
