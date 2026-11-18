@@ -11,12 +11,10 @@ import SwiftRegularExpression
 public struct SNLRequest: SNLRequestPrtcl {
     
     public var method: SNLHTTPMethod
-    public var multipart: Bool
     public var headers: [String: String]?
     public var params: [String: Any]?
     public var hash: String?
-    public var body: Data?
-    public var files: SNLFiles?
+    public var body: SNLBody?
     public var timeoutIntervalForRequest: Double?
     public var timeoutIntervalForResource: Double?
 
@@ -34,25 +32,21 @@ public struct SNLRequest: SNLRequestPrtcl {
 
     public init(method: SNLHTTPMethod,
                 path: URL,
-                multipart: Bool = false,
                 dynamicPathsParts: [String: String]?,
                 headers: [String: String]? = nil,
                 params: [String: Any]? = nil,
                 hash: String? = nil,
-                body: Data? = nil,
-                files: SNLFiles? = nil,
+                body: SNLBody? = nil,
                 timeoutIntervalForRequest: Double? = nil,
                 timeoutIntervalForResource: Double? = nil
     ) {
         self.method = method
-        self.multipart = multipart
         self.dynamicPathsParts = (dynamicPathsParts != nil ? dynamicPathsParts! : [:])
         self.headers = headers
         self.params = params
         self.hash = hash
         self.body = body
         self.path = path
-        self.files = files
         self.timeoutIntervalForRequest = timeoutIntervalForRequest
         self.timeoutIntervalForResource = timeoutIntervalForResource
         updatePath()

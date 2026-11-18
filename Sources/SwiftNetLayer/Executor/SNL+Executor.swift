@@ -15,14 +15,12 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     public var resource: SNLResourcePrtcl
     public var method: SNLHTTPMethod
     public var path: URL
-    public var multipart: Bool
     public var dynamicPathsParts: SNLDynamicParts?
     public var targetHeaders: SNLHeader?
     public var targetParams: SNLParams?
     public var requestHeaders: SNLHeader?
     public var requestParams: SNLParams?
     public var body: SNLBody?
-    public var files: SNLFiles?
     public var timeoutIntervalForRequest: Double?
     public var timeoutIntervalForResource: Double?
 
@@ -168,19 +166,19 @@ public struct SNLExecutor: SNLExecutorPrtcl {
 
         return SNLRequest(method: method,
                           path: path,
-                          multipart: multipart,
                           dynamicPathsParts: dynamicPathsParts,
                           headers: mergedHeaders,
                           params: mergedParams,
                           hash: nil,
                           body: body,
-                          files: files)
+                          timeoutIntervalForRequest: timeoutIntervalForRequest,
+                          timeoutIntervalForResource: timeoutIntervalForResource)
     }
 
     private func mergeHeaders(_ resourceHeaders: SNLHeader?, _ targetHeaders: SNLHeader?, _ requestHeaders: SNLHeader?) -> SNLHeader {
         var resultHeaders = mergeOptionalDictionary(resourceHeaders, targetHeaders)
         resultHeaders = mergeOptionalDictionary(resultHeaders, requestHeaders)
-        return mergeOptionalDictionary(resultHeaders, defaultHeaders())
+        return resultHeaders
     }
 
     private func mergeParams(_ resourceParams: SNLParams?, _ targetParams: SNLParams?, _ requestParams: SNLParams?) -> SNLParams {
@@ -188,14 +186,6 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         return mergeOptionalDictionary(resultParams, requestParams)
     }
 
-    private func defaultHeaders() -> SNLHeader {
-        var defaultHeaders: SNLHeader = [:]
-        if body == nil && requestHeaders?[SNLHeaderName.contentType.description] == nil {
-            defaultHeaders[SNLHeaderName.contentType.description] = SNLMIMEType.applicationXFormEncodedData.description
-        }
-        return defaultHeaders
-    }
-    
     private func awaitAvailableSlotForRequest() {
         guard let requestPerSecondOptions = resource.requestPerSecondOptions else { return }
         let delayBeforRetryRequest = requestPerSecondOptions.value.retryDelaySecond

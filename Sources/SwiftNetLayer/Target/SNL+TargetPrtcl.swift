@@ -23,12 +23,10 @@ public protocol SNLTargetPrtcl {
     func makeExecutor(target: SNLTargetPrtcl,
                       resource: SNLResourcePrtcl,
                       method: SNLHTTPMethod,
-                      multipart: Bool,
                       dynamicPathsParts: SNLDynamicParts?,
                       requestHeaders: SNLHeader?,
                       requestParams: SNLParams?,
                       body: SNLBody?,
-                      files: SNLFiles?,
                       timeoutIntervalForRequest: Double?,
                       timeoutIntervalForResource: Double?) -> SNLExecutorPrtcl
 }

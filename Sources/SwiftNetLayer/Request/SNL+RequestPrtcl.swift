@@ -13,8 +13,6 @@ public protocol SNLRequestPrtcl {
     var method: SNLHTTPMethod { get set }
     /// path
     var path: URL { get set }
-    /// multipart
-    var multipart: Bool { get set }
     /// user/:id
     var dynamicPathsParts: [String: String] { get set }
     /// HTTP_HEADER_NAME   VALUE
@@ -24,9 +22,7 @@ public protocol SNLRequestPrtcl {
     /// #hash_name
     var hash: String? { get set }
     /// body
-    var body: Data? { get set }
-    /// files
-    var files: SNLFiles? { get set }
+    var body: SNLBody? { get set }
     /// session timeoutIntervalForRequest
     var timeoutIntervalForRequest: Double? { get set }
     /// session timeoutIntervalForResource
