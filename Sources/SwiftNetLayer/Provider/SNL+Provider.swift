@@ -33,11 +33,12 @@ public final class SNLProvider: SNLProviderPrtcl {
         return newURL
     }
 
-    public func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool = false,
-                        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = {_, _, _ in}) throws -> Void
-    {
+    public func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool = false,
+        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = {_, _, _ in}
+    ) throws -> Void {
         let session = makeSession(request)
         defer { session?.finishTasksAndInvalidate() }
 
@@ -71,9 +72,10 @@ public final class SNLProvider: SNLProviderPrtcl {
     }
 
     @discardableResult
-    public func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool = false
+    public func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool = false
     ) async throws -> (Data, URLResponse) {
         let session = makeSession(request)
         defer { session?.finishTasksAndInvalidate() }

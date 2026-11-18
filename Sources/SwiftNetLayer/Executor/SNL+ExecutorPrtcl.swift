@@ -27,11 +27,15 @@ public protocol SNLExecutorPrtcl {
     func execute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
     func execute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
 
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type,
-                                           debug: Bool,
-                                           _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type,
-                                           _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    func execute<ResponseModel: Decodable>(
+        model: ResponseModel.Type,
+        debug: Bool,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
+    ) throws
+    func execute<ResponseModel: Decodable>(
+        model: ResponseModel.Type,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
+    ) throws
     
     @discardableResult
     func execute(debug: Bool) async throws -> (Data, URLResponse)
@@ -54,9 +58,13 @@ public protocol SNLExecutorPrtcl {
     func waitExecute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
     func waitExecute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
 
-    func waitExecute<ResponseModel: Decodable>(model: ResponseModel.Type,
-                                               debug: Bool,
-                                               _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
-    func waitExecute<ResponseModel: Decodable>(model: ResponseModel.Type,
-                                               _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void) throws
+    func waitExecute<ResponseModel: Decodable>(
+        model: ResponseModel.Type,
+        debug: Bool,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
+    ) throws
+    func waitExecute<ResponseModel: Decodable>(
+        model: ResponseModel.Type,
+        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
+    ) throws
 }

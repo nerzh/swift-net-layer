@@ -60,13 +60,14 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
         }
     }
 
-    public init(provider: SNLProviderPrtcl = SNLProvider(),
-                protocol: SNLProtocolType = .http,
-                domain: String,
-                version: String? = nil,
-                defaultHeaders: [String: String]? = nil,
-                defaultParams: [String: Any]? = nil,
-                requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? = nil
+    public init(
+        provider: SNLProviderPrtcl = SNLProvider(),
+        protocol: SNLProtocolType = .http,
+        domain: String,
+        version: String? = nil,
+        defaultHeaders: [String: String]? = nil,
+        defaultParams: [String: Any]? = nil,
+        requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? = nil
     ) {
         self.provider = provider
         self.protocol = `protocol`

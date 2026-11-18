@@ -15,18 +15,22 @@ public protocol SNLTargetPrtcl {
     var headers: [String: String]? { get set }
     var params: [String: Any]? { get set }
 
-    init(resource: SNLResourcePrtcl,
-         path: String,
-         headers: [String: String]?,
-         params: [String: Any]?)
+    init(
+        resource: SNLResourcePrtcl,
+        path: String,
+        headers: [String: String]?,
+        params: [String: Any]?
+    )
 
-    func makeExecutor(target: SNLTargetPrtcl,
-                      resource: SNLResourcePrtcl,
-                      method: SNLHTTPMethod,
-                      dynamicPathsParts: SNLDynamicParts?,
-                      requestHeaders: SNLHeader?,
-                      requestParams: SNLParams?,
-                      body: SNLBody?,
-                      timeoutIntervalForRequest: Double?,
-                      timeoutIntervalForResource: Double?) -> SNLExecutorPrtcl
+    func makeExecutor(
+        target: SNLTargetPrtcl,
+        resource: SNLResourcePrtcl,
+        method: SNLHTTPMethod,
+        dynamicPathsParts: SNLDynamicParts?,
+        requestHeaders: SNLHeader?,
+        requestParams: SNLParams?,
+        body: SNLBody?,
+        timeoutIntervalForRequest: Double?,
+        timeoutIntervalForResource: Double?
+    ) -> SNLExecutorPrtcl
 }

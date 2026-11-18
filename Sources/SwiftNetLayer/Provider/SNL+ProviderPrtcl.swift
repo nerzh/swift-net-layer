@@ -14,31 +14,38 @@ public protocol SNLProviderPrtcl: Sendable {
     
     init()
     
-    func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool,
-                        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
+    func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool,
+        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void
+    ) throws
     
     @discardableResult
-    func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool
+    func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool
     ) async throws -> (Data, URLResponse)
 }
 
 
 public extension SNLProviderPrtcl {
-    func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool = false,
-                        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = { _, _, _ in }) throws {
+    func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool = false,
+        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = { _, _, _ in }
+    ) throws {
         try SNLProvider().executeRequest(resource: resource, request: request, debug: debug, handler)
     }
 
     @discardableResult
-    func executeRequest(resource: SNLResourcePrtcl,
-                        request: SNLRequestPrtcl,
-                        debug: Bool = false) async throws -> (Data, URLResponse) {
+    func executeRequest(
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool = false
+    ) async throws -> (Data, URLResponse) {
         try await SNLProvider().executeRequest(resource: resource, request: request, debug: debug)
     }
 }

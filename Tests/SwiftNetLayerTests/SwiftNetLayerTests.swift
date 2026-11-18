@@ -294,7 +294,9 @@ private struct TimeoutProvider: SNLProviderPrtcl {
     init() {}
 
     func executeRequest(
-        resource: SNLResourcePrtcl, request: SNLRequestPrtcl, debug: Bool,
+        resource: SNLResourcePrtcl,
+        request: SNLRequestPrtcl,
+        debug: Bool,
         _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void
     ) throws {
         let response = try response(request)

@@ -30,15 +30,16 @@ public struct SNLRequest: SNLRequestPrtcl {
         }
     }
 
-    public init(method: SNLHTTPMethod,
-                path: URL,
-                dynamicPathsParts: [String: String]?,
-                headers: [String: String]? = nil,
-                params: [String: Any]? = nil,
-                hash: String? = nil,
-                body: SNLBody? = nil,
-                timeoutIntervalForRequest: Double? = nil,
-                timeoutIntervalForResource: Double? = nil
+    public init(
+        method: SNLHTTPMethod,
+        path: URL,
+        dynamicPathsParts: [String: String]?,
+        headers: [String: String]? = nil,
+        params: [String: Any]? = nil,
+        hash: String? = nil,
+        body: SNLBody? = nil,
+        timeoutIntervalForRequest: Double? = nil,
+        timeoutIntervalForResource: Double? = nil
     ) {
         self.method = method
         self.dynamicPathsParts = (dynamicPathsParts != nil ? dynamicPathsParts! : [:])
