@@ -5,6 +5,27 @@ import FoundationNetworking
 #endif
 
 final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
+    func testDynamicPathEncodingSurvivesAsyncAndCallbackRequests() async throws {
+        let target = SNLTarget(
+            resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test", version: "v1"),
+            path: "/users/:id/extra/:optional?fixed=a%2Bb#section"
+        )
+        let executor = target.makeExecutor(
+            target: target, resource: target.resource, method: .get,
+            dynamicPathsParts: [":id": "a/b?injected=1#part %"], requestParams: ["page": 2]
+        )
+
+        for callback in [false, true] {
+            let request = try await capture(executor, callback: callback)
+            let url = try XCTUnwrap(URLComponents(string: request.url))
+            XCTAssertEqual(url.percentEncodedPath, "/v1/users/a%2Fb%3Finjected%3D1%23part%20%25/extra")
+            XCTAssertEqual(url.fragment, "section")
+            XCTAssertEqual(request.queryValues("fixed"), ["a+b"])
+            XCTAssertEqual(request.queryValues("page"), ["2"])
+            XCTAssertTrue(request.queryValues("injected").isEmpty)
+        }
+    }
+
     func testQueryMergesWithExistingQueryAndPreservesFragment() async throws {
         let target = SNLTarget(
             resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test", version: "v1"),

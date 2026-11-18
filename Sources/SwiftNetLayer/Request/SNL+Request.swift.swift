@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import SwiftRegularExpression
+import SwiftExtensionsPack
 
 public struct SNLRequest: SNLRequestPrtcl {
     
@@ -18,17 +18,13 @@ public struct SNLRequest: SNLRequestPrtcl {
     public var timeoutIntervalForRequest: Double?
     public var timeoutIntervalForResource: Double?
 
-    private var _path: URL!
+    private var pathTemplate: URL
     public var path: URL {
-        set { _path = urlWithDynamicPath(path: newValue) }
-        get { _path }
+        set { pathTemplate = newValue }
+        get { urlWithDynamicPath(path: pathTemplate) }
     }
 
-    public var dynamicPathsParts: [String: String] {
-        didSet {
-            _path = urlWithDynamicPath(path: path)
-        }
-    }
+    public var dynamicPathsParts: [String: String]
 
     public init(
         method: SNLHTTPMethod,
@@ -42,19 +38,14 @@ public struct SNLRequest: SNLRequestPrtcl {
         timeoutIntervalForResource: Double? = nil
     ) {
         self.method = method
-        self.dynamicPathsParts = (dynamicPathsParts != nil ? dynamicPathsParts! : [:])
+        self.dynamicPathsParts = dynamicPathsParts ?? [:]
         self.headers = headers
         self.params = params
         self.hash = hash
         self.body = body
-        self.path = path
+        self.pathTemplate = path
         self.timeoutIntervalForRequest = timeoutIntervalForRequest
         self.timeoutIntervalForResource = timeoutIntervalForResource
-        updatePath()
-    }
-
-    private mutating func updatePath() {
-        self.path = replacePathsPart(path: path.absoluteString, parts: dynamicPathsParts)
     }
 
     private func urlWithDynamicPath(path: URL) -> URL {
@@ -62,29 +53,31 @@ public struct SNLRequest: SNLRequestPrtcl {
     }
 
     private func replacePathsPart(path: String, parts: [String: String]) -> URL {
-        var resultPath: String = path
-        resultPath.replaceSelf("//", "/")
-        
-        let pattern = "\\/(:[\\s\\S]+?)(\\/|$)"
-        guard path[pattern] else {
+        guard var components = URLComponents(string: path) else { fatalError("NetRequest: Bad PATH") }
+        let pathParts = components.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
+        guard pathParts.contains(where: { $0.hasPrefix(":") }) else {
             guard let url = URL(string: path) else { fatalError("NetRequest: Bad PATH") }
             return url
         }
 
-        let partsArray = path.split(separator: "/")
-        resultPath = partsArray.map { (str: String.SubSequence) -> String in
-            let key = String(str)
-            if let part = parts[key] {
-                return part
-            } else {
-                if key[#":[\s\S]+"#] { return "" }
-                return key
-            }
-        }.joined(separator: "/")
-        resultPath.replaceSelf("//", "/")
-        resultPath.replaceFirstSelf("/$", "")
+        let resolvedParts = pathParts.compactMap { part -> String? in
+            guard part.hasPrefix(":") else { return String(part) }
+            let key = String(part).removingPercentEncoding ?? String(part)
+            guard let value = parts[key], !value.isEmpty else { return nil }
 
-        guard let url = URL(string: resultPath) else { fatalError("NetRequest: Bad PATH") }
+            let encodedValue = Net.urlEncode(value)
+            if encodedValue == "." || encodedValue == ".." {
+                return encodedValue.replacingOccurrences(of: ".", with: "%2E")
+            }
+            return encodedValue
+        }
+        var resolvedPath = resolvedParts.joined(separator: "/")
+        if resolvedPath.isEmpty && components.percentEncodedPath.hasPrefix("/") {
+            resolvedPath = "/"
+        }
+        components.percentEncodedPath = resolvedPath
+
+        guard let url = components.url else { fatalError("NetRequest: Bad PATH") }
 
         return url
     }
