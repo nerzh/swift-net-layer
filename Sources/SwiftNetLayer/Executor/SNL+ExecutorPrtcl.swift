@@ -6,9 +6,6 @@
 //
 
 import Foundation
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
 
 public protocol SNLExecutorPrtcl {
 
@@ -24,47 +21,60 @@ public protocol SNLExecutorPrtcl {
     var timeoutIntervalForRequest: Double? { get set }
     var timeoutIntervalForResource: Double? { get set }
 
-    func execute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
-    func execute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
+    func execute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void)
 
-    func execute<ResponseModel: Decodable>(
+    func execute(_ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void)
+
+    func execute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
         debug: Bool,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws
-    func execute<ResponseModel: Decodable>(
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    )
+
+    func execute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    )
     
+
     @discardableResult
-    func execute(debug: Bool) async throws -> (Data, URLResponse)
+    func execute(debug: Bool) async throws -> SNLHTTPResponse
+
     @discardableResult
-    func execute() async throws -> (Data, URLResponse)
+    func execute() async throws -> SNLHTTPResponse
+
     @discardableResult
     func execute(debug: Bool) async throws -> Data
+
     @discardableResult
     func execute() async throws -> Data
     
+
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, URLResponse)
+    func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, SNLHTTPResponse)
+
     @discardableResult
     func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> ResponseModel
+
     @discardableResult
-    func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, URLResponse)
+    func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, SNLHTTPResponse)
+
     @discardableResult
     func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> ResponseModel
     
-    func waitExecute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
-    func waitExecute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws
 
-    func waitExecute<ResponseModel: Decodable>(
+    func waitExecute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void)
+
+    func waitExecute(_ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void)
+
+    func waitExecute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
         debug: Bool,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws
-    func waitExecute<ResponseModel: Decodable>(
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    )
+
+    func waitExecute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    )
 }

@@ -6,9 +6,6 @@
 //
 
 import Foundation
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
 
 public protocol SNLProviderPrtcl: Sendable {
     
@@ -18,15 +15,15 @@ public protocol SNLProviderPrtcl: Sendable {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool,
-        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void
-    ) throws
+        _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void
+    )
     
     @discardableResult
     func executeRequest(
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool
-    ) async throws -> (Data, URLResponse)
+    ) async throws -> SNLHTTPResponse
 }
 
 
@@ -35,9 +32,9 @@ public extension SNLProviderPrtcl {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool = false,
-        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = { _, _, _ in }
-    ) throws {
-        try SNLProvider().executeRequest(resource: resource, request: request, debug: debug, handler)
+        _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void = { _, _ in }
+    ) {
+        SNLProvider().executeRequest(resource: resource, request: request, debug: debug, handler)
     }
 
     @discardableResult
@@ -45,7 +42,7 @@ public extension SNLProviderPrtcl {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool = false
-    ) async throws -> (Data, URLResponse) {
+    ) async throws -> SNLHTTPResponse {
         try await SNLProvider().executeRequest(resource: resource, request: request, debug: debug)
     }
 }

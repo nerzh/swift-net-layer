@@ -206,6 +206,30 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         }
     }
 
+    func testCustomProviderReturnsLibraryHTTPResponse() async throws {
+        let resource = SNLResource(provider: TimeoutProvider(), domain: "swift-net-layer.test")
+        let target = SNLTarget(resource: resource, path: "/custom-provider")
+        let executor = target.makeExecutor(target: target, resource: resource, method: .get)
+
+        let output: (CapturedRequest, SNLHTTPResponse) = try await executor.execute(model: CapturedRequest.self)
+        XCTAssertEqual(try JSONDecoder().decode(CapturedRequest.self, from: output.1.body).url, output.0.url)
+        XCTAssertEqual(output.1.url, target.path)
+        XCTAssertEqual(output.1.statusCode, 200)
+        XCTAssertEqual(output.1.headers[.custom("x-provider")], "custom")
+
+        let finished = expectation(description: "Custom provider HTTP response")
+        executor.execute(model: CapturedRequest.self) { model, response, error in
+            XCTAssertNotNil(model)
+            XCTAssertFalse(response?.body.isEmpty ?? true)
+            XCTAssertEqual(response?.url, output.1.url)
+            XCTAssertEqual(response?.statusCode, 200)
+            XCTAssertEqual(response?.headers[.custom("X-Provider")], "custom")
+            XCTAssertNil(error)
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 2)
+    }
+
     func testCustomProviderCanEncodeBodyWithoutNetTypes() async throws {
         let resource = SNLResource(provider: TimeoutProvider(), domain: "swift-net-layer.test")
         let target = SNLTarget(resource: resource, path: "/custom-provider")
@@ -237,18 +261,14 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
     private func capture(_ executor: SNLExecutorPrtcl, callback: Bool = false) async throws -> CapturedRequest {
         if callback {
             return try await withCheckedThrowingContinuation { continuation in
-                do {
-                    try executor.execute(model: CapturedRequest.self) { request, _, error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        } else if let request {
-                            continuation.resume(returning: request)
-                        } else {
-                            continuation.resume(throwing: URLError(.badServerResponse))
-                        }
+                executor.execute(model: CapturedRequest.self) { request, _, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let request {
+                        continuation.resume(returning: request)
+                    } else {
+                        continuation.resume(throwing: URLError(.badServerResponse))
                     }
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
@@ -331,17 +351,20 @@ private struct TimeoutProvider: SNLProviderPrtcl {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool,
-        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void
-    ) throws {
-        let response = try response(request)
-        try handler(response.0, response.1, nil)
+        _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void
+    ) {
+        do {
+            handler(try response(request), nil)
+        } catch {
+            handler(nil, SNLError(error))
+        }
     }
 
-    func executeRequest(resource: SNLResourcePrtcl, request: SNLRequestPrtcl, debug: Bool) async throws -> (Data, URLResponse) {
+    func executeRequest(resource: SNLResourcePrtcl, request: SNLRequestPrtcl, debug: Bool) async throws -> SNLHTTPResponse {
         try response(request)
     }
 
-    private func response(_ request: SNLRequestPrtcl) throws -> (Data, URLResponse) {
+    private func response(_ request: SNLRequestPrtcl) throws -> SNLHTTPResponse {
         var body = Data()
         if case let .json(value) = request.body {
             body = try JSONEncoder().encode(value)
@@ -354,8 +377,10 @@ private struct TimeoutProvider: SNLProviderPrtcl {
                 "authorization": request.headers?[.authorization] ?? "nil"
             ], body: body
         )
-        let response = URLResponse(url: request.path, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
-        return (try JSONEncoder().encode(captured), response)
+        return SNLHTTPResponse(
+            url: request.path, statusCode: 200, headers: [.custom("X-Provider"): "custom"],
+            body: try JSONEncoder().encode(captured)
+        )
     }
 }
 

@@ -37,21 +37,19 @@ public final class SNLProvider: SNLProviderPrtcl {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool = false,
-        _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void = {_, _, _ in}
-    ) throws -> Void {
-        let session = makeSession(request)
+        _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void = { _, _ in }
+    ) {
+        let session = reconfigureSession(request)
         defer { session?.finishTasksAndInvalidate() }
 
         let safeRequest = SafeValue(request)
 
-        try Net.sendRequest(url: fullURL(resource, request).absoluteString,
+        Net.sendRequest(url: fullURL(resource, request).absoluteString,
                             method: request.method.rawValue.uppercased(),
                             headers: makeNetHeaders(request.headers),
                             queryParams: request.params,
                             body: makeNetBody(request.body),
-                            session: session ?? self.session,
-                            beforeResume: nil,
-                            afterResume: nil
+                            session: session ?? self.session
         ) { (data: Data?, urlResponse: URLResponse?, error: Error?) in
             if
                 debug,
@@ -64,10 +62,19 @@ public final class SNLProvider: SNLProviderPrtcl {
                 )
             }
             if let error {
-                try handler(data, urlResponse, SNLError(error))
-            } else {
-                try handler(data, urlResponse, nil)
+                handler(nil, SNLError(error))
+                return
             }
+
+            let response: SNLHTTPResponse
+            do {
+                response = try self.makeHTTPResponse(data: data, response: urlResponse)
+            } catch {
+                handler(nil, SNLError(error))
+                return
+            }
+
+            handler(response, nil)
         }
     }
 
@@ -76,8 +83,8 @@ public final class SNLProvider: SNLProviderPrtcl {
         resource: SNLResourcePrtcl,
         request: SNLRequestPrtcl,
         debug: Bool = false
-    ) async throws -> (Data, URLResponse) {
-        let session = makeSession(request)
+    ) async throws -> SNLHTTPResponse {
+        let session = reconfigureSession(request)
         defer { session?.finishTasksAndInvalidate() }
 
         let response = try await Net.sendRequest(url: fullURL(resource, request).absoluteString,
@@ -91,7 +98,25 @@ public final class SNLProvider: SNLProviderPrtcl {
             printDebugInfo(resource: resource, request: request, response: response)
         }
 
-        return response
+        return try makeHTTPResponse(data: response.data, response: response.response)
+    }
+
+    private func makeHTTPResponse(data: Data?, response: URLResponse?) throws -> SNLHTTPResponse {
+        guard let response = response as? HTTPURLResponse,
+              let url = response.url else {
+            throw SNLError("Expected an HTTP response with a URL")
+        }
+        guard let data else {
+            throw SNLError("Missing HTTP response body")
+        }
+
+        var headers: SNLHeader = [:]
+        for (name, value) in response.allHeaderFields {
+            guard let name = name as? String else { continue }
+            headers[.custom(name)] = String(describing: value)
+        }
+
+        return SNLHTTPResponse(url: url, statusCode: response.statusCode, headers: headers, body: data)
     }
 
     private func makeNetHeaders(_ headers: SNLHeader?) -> [String: String]? {
@@ -122,7 +147,7 @@ public final class SNLProvider: SNLProviderPrtcl {
         }
     }
 
-    private func makeSession(_ request: SNLRequestPrtcl) -> URLSession? {
+    private func reconfigureSession(_ request: SNLRequestPrtcl) -> URLSession? {
         guard request.timeoutIntervalForRequest != nil || request.timeoutIntervalForResource != nil else {
             return nil
         }

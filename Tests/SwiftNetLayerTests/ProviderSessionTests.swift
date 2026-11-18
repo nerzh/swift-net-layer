@@ -77,23 +77,19 @@ final class ProviderSessionTests: XCTestCase, @unchecked Sendable {
     ) async throws -> Data {
         if callback {
             return try await withCheckedThrowingContinuation { continuation in
-                do {
-                    try provider.executeRequest(resource: resource, request: request, debug: false) { data, _, error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        } else if let data {
-                            continuation.resume(returning: data)
-                        } else {
-                            continuation.resume(throwing: URLError(.badServerResponse))
-                        }
+                provider.executeRequest(resource: resource, request: request, debug: false) { response, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let response {
+                        continuation.resume(returning: response.body)
+                    } else {
+                        continuation.resume(throwing: URLError(.badServerResponse))
                     }
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
 
-        return try await provider.executeRequest(resource: resource, request: request, debug: false).0
+        return try await provider.executeRequest(resource: resource, request: request, debug: false).body
     }
 }
 

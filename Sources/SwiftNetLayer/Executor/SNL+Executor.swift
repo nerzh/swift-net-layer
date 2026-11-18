@@ -8,9 +8,6 @@
 import Dispatch
 import Foundation
 import SwiftExtensionsPack
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
 
 public struct SNLExecutor: SNLExecutorPrtcl {
     public var resource: SNLResourcePrtcl
@@ -25,52 +22,57 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     public var timeoutIntervalForRequest: Double?
     public var timeoutIntervalForResource: Double?
 
-    public func execute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
+    public func execute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {
         awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
-        try provider.executeRequest(resource: resource, request: request, debug: debug, handler)
+        provider.executeRequest(resource: resource, request: request, debug: debug, handler)
     }
     
-    public func execute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
-        try execute(debug: false, handler)
+    public func execute(_ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {
+        execute(debug: false, handler)
     }
     
     public func execute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
         debug: Bool,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws {
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    ) {
         awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
-        try provider.executeRequest(resource: resource, request: request, debug: debug) { (data, response, error) in
-            guard let data else {
-                try handler(nil, response, error)
+        provider.executeRequest(resource: resource, request: request, debug: debug) { (response, error) in
+            if let error {
+                handler(nil, response, error)
+                return
+            }
+
+            guard let response else {
+                handler(nil, nil, SNLError("Missing HTTP response"))
                 return
             }
 
             let object: ResponseModel
             do {
-                object = try JSONDecoder().decode(model, from: data)
+                object = try JSONDecoder().decode(model, from: response.body)
             } catch {
-                try handler(nil, response, SNLError(error))
+                handler(nil, response, SNLError(error))
                 return
             }
 
-            try handler(object, response, error)
+            handler(object, response, error)
         }
     }
     
     public func execute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws {
-        try execute(model: model, debug: false, handler)
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    ) {
+        execute(model: model, debug: false, handler)
     }
     
     @discardableResult
-    public func execute(debug: Bool) async throws -> (Data, URLResponse) {
+    public func execute(debug: Bool) async throws -> SNLHTTPResponse {
         try await awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
@@ -82,29 +84,29 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         try await awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
-        return try await provider.executeRequest(resource: resource, request: request, debug: debug).0
+        return try await provider.executeRequest(resource: resource, request: request, debug: debug).body
     }
     
     @discardableResult
-    public func execute() async throws -> (Data, URLResponse) {
+    public func execute() async throws -> SNLHTTPResponse {
         try await execute(debug: false)
     }
     
     @discardableResult
     public func execute() async throws -> Data {
-        try await execute(debug: false).0
+        try await execute(debug: false).body
     }
     
     @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, URLResponse) {
+    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type, debug: Bool) async throws -> (ResponseModel, SNLHTTPResponse) {
         try await awaitAvailableSlotForRequest()
         let provider = resource.provider
         let request = makeRequest()
         let out = try await provider.executeRequest(resource: resource, request: request, debug: debug)
-        let data: Data = out.0
+        let data = out.body
         do {
             let object = try JSONDecoder().decode(model, from: data)
-            return (object, out.1)
+            return (object, out)
         } catch {
             let dataString: String? = String(data: data, encoding: .utf8)
             throw SNLError("\(dataString ?? "") \(SNLError(error).description)")
@@ -117,7 +119,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     }
     
     @discardableResult
-    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, URLResponse) {
+    public func execute<ResponseModel: Decodable>(model: ResponseModel.Type) async throws -> (ResponseModel, SNLHTTPResponse) {
         try await execute(model: model, debug: false)
     }
     
@@ -126,55 +128,39 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         try await execute(model: model, debug: false).0
     }
 
-    public func waitExecute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
+    public func waitExecute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {
         let waitGroup = DispatchGroup()
-        let handlerResult = SafeValue<Result<Void, Error>>(.success(()))
         waitGroup.enter()
-        do {
-            try execute(debug: debug) { (data, response, error) in
-                defer { waitGroup.leave() }
-                let result = Result { try handler(data, response, error) }
-                handlerResult.change { $0 = result }
-            }
-        } catch {
-            waitGroup.leave()
-            throw error
+        execute(debug: debug) { response, error in
+            defer { waitGroup.leave() }
+            handler(response, error)
         }
         waitGroup.wait()
-        try handlerResult.value.get()
     }
     
-    public func waitExecute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
-        try waitExecute(debug: false, handler)
+    public func waitExecute(_ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {
+        waitExecute(debug: false, handler)
     }
     
     public func waitExecute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
         debug: Bool,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws {
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    ) {
         let waitGroup = DispatchGroup()
-        let handlerResult = SafeValue<Result<Void, Error>>(.success(()))
         waitGroup.enter()
-        do {
-            try execute(model: model, debug: debug) { (model, response, error) in
-                defer { waitGroup.leave() }
-                let result = Result { try handler(model, response, error) }
-                handlerResult.change { $0 = result }
-            }
-        } catch {
-            waitGroup.leave()
-            throw error
+        execute(model: model, debug: debug) { model, response, error in
+            defer { waitGroup.leave() }
+            handler(model, response, error)
         }
         waitGroup.wait()
-        try handlerResult.value.get()
     }
     
     public func waitExecute<ResponseModel: Decodable & Sendable>(
         model: ResponseModel.Type,
-        _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
-    ) throws {
-        try waitExecute(model: model, debug: false, handler)
+        _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
+    ) {
+        waitExecute(model: model, debug: false, handler)
     }
 
     private func makeRequest() -> SNLRequestPrtcl {

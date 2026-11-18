@@ -16,7 +16,7 @@ let package = Package(
     ],
     
     dependencies: [
-        .package(url: "https://github.com/nerzh/swift-extensions-pack.git", .upToNextMajor(from: "2.13.0")),
+        .package(url: "https://github.com/nerzh/swift-extensions-pack.git", .upToNextMajor(from: "2.14.0")),
         .package(url: "https://github.com/nerzh/swift-regular-expression.git", .upToNextMajor(from: "0.2.4")),
     ],
     
