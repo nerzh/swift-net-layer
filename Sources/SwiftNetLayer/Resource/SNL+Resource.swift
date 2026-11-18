@@ -5,13 +5,13 @@
 //  Created by Oleh Hudeichuk on 17.12.2019.
 //
 
+import Dispatch
 import Foundation
 import SwiftExtensionsPack
 
 public struct RequestPerSecondOptions {
     var requestCounter: UInt = .init(0)
-    var lastRequestTime: UInt = .init(Date().toSeconds())
-//    public var requestPerSecond: UInt
+    var windowStartNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
     public var requestLimit: UInt
     public var timeRangeLimitSecond: UInt
     /// nanoseconds - delay before retry request; default: 0.01 s
@@ -21,6 +21,18 @@ public struct RequestPerSecondOptions {
         self.requestLimit = requestLimit
         self.timeRangeLimitSecond = timeRangeLimitSecond
         self.retryDelaySecond = retryDelaySecond
+    }
+
+    mutating func allowRequest(at uptimeNanoseconds: UInt64) -> Bool {
+        if uptimeNanoseconds < windowStartNanoseconds ||
+            (uptimeNanoseconds - windowStartNanoseconds) / 1_000_000_000 >= UInt64(timeRangeLimitSecond) {
+            windowStartNanoseconds = uptimeNanoseconds
+            requestCounter = 0
+        }
+
+        guard requestCounter < requestLimit else { return false }
+        requestCounter += 1
+        return true
     }
 }
 
@@ -42,21 +54,7 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
     public var allowRequest: Bool {
         guard let requestPerSecondOptions else { return true }
         return requestPerSecondOptions.change { options in
-            let currentTime: UInt = Date().toSeconds()
-            var allow: Bool = false
-            let range = currentTime - options.lastRequestTime
-            if range >= options.timeRangeLimitSecond {
-                options.lastRequestTime = currentTime
-                options.requestCounter = 1
-                allow = true
-            }
-            if options.requestCounter < options.requestLimit {
-                options.requestCounter += 1
-                allow = true
-            } else {
-                allow = false
-            }
-            return allow
+            options.allowRequest(at: DispatchTime.now().uptimeNanoseconds)
         }
     }
 
