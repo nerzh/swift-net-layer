@@ -126,14 +126,18 @@ public final class SNLProvider: SNLProviderPrtcl {
         guard request.timeoutIntervalForRequest != nil || request.timeoutIntervalForResource != nil else {
             return nil
         }
-        let configuration = session.configuration
+        let configuration = session.configuration.copy() as! URLSessionConfiguration
         if let timeout = request.timeoutIntervalForRequest {
             configuration.timeoutIntervalForRequest = timeout
         }
         if let timeout = request.timeoutIntervalForResource {
             configuration.timeoutIntervalForResource = timeout
         }
-        return URLSession(configuration: configuration)
+        return URLSession(
+            configuration: configuration,
+            delegate: session.delegate,
+            delegateQueue: session.delegateQueue
+        )
     }
 
     private func printDebugInfo(
