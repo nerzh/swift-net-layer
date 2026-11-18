@@ -5,6 +5,7 @@
 //  Created by Oleh Hudeichuk on 19.12.2019.
 //
 
+import Dispatch
 import Foundation
 import SwiftExtensionsPack
 #if canImport(FoundationNetworking)
@@ -44,20 +45,20 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         let provider = resource.provider
         let request = makeRequest()
         try provider.executeRequest(resource: resource, request: request, debug: debug) { (data, response, error) in
-            do {
-                guard let data = data else {
-                    try handler(nil, response, error)
-                    return
-                }
-                let object = try JSONDecoder().decode(model, from: data)
-                if let error {
-                    try handler(object, response, SNLError(error))
-                } else {
-                    try handler(object, response, nil)
-                }
-            } catch let error {
-                try? handler(nil, response, SNLError(error))
+            guard let data else {
+                try handler(nil, response, error)
+                return
             }
+
+            let object: ResponseModel
+            do {
+                object = try JSONDecoder().decode(model, from: data)
+            } catch {
+                try handler(nil, response, SNLError(error))
+                return
+            }
+
+            try handler(object, response, error)
         }
     }
     
@@ -127,12 +128,20 @@ public struct SNLExecutor: SNLExecutorPrtcl {
 
     public func waitExecute(debug: Bool, _ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
         let waitGroup = DispatchGroup()
+        let handlerResult = SafeValue<Result<Void, Error>>(.success(()))
         waitGroup.enter()
-        try execute(debug: debug) { (data, response, error) in
-            try handler(data, response, error)
+        do {
+            try execute(debug: debug) { (data, response, error) in
+                defer { waitGroup.leave() }
+                let result = Result { try handler(data, response, error) }
+                handlerResult.change { $0 = result }
+            }
+        } catch {
             waitGroup.leave()
+            throw error
         }
         waitGroup.wait()
+        try handlerResult.value.get()
     }
     
     public func waitExecute(_ handler: @escaping @Sendable (Data?, URLResponse?, SNLError?) throws -> Void) throws {
@@ -145,12 +154,20 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         _ handler: @escaping @Sendable (ResponseModel?, URLResponse?, SNLError?) throws -> Void
     ) throws {
         let waitGroup = DispatchGroup()
+        let handlerResult = SafeValue<Result<Void, Error>>(.success(()))
         waitGroup.enter()
-        try execute(model: model, debug: debug) { (model, response, error) in
-            try handler(model, response, error)
+        do {
+            try execute(model: model, debug: debug) { (model, response, error) in
+                defer { waitGroup.leave() }
+                let result = Result { try handler(model, response, error) }
+                handlerResult.change { $0 = result }
+            }
+        } catch {
             waitGroup.leave()
+            throw error
         }
         waitGroup.wait()
+        try handlerResult.value.get()
     }
     
     public func waitExecute<ResponseModel: Decodable & Sendable>(
