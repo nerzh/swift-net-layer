@@ -1,689 +1,342 @@
 # SwiftNetLayer
 
-`SwiftNetLayer` is a lightweight networking layer for describing HTTP APIs in Swift. It helps keep networking code split into predictable, readable files:
+A Swift library for describing HTTP APIs as resources, targets, and requests.
 
-- `Resource` describes the API host: `https://api.example.com`, shared headers, shared query params, and request limits.
-- `Target` describes an endpoint group: `/users`, `/books`, `/wallets`, `/rpc`.
-- A method inside a target describes one concrete request: HTTP method, path variables, query params, body, files, timeout, and response model.
+- **Resource** — the API host and shared settings: headers, query parameters, provider, and request limits.
+- **Target** — a path template and methods that describe requests to that endpoint.
+- **Executor** — a prepared request that you can execute with async/await or a callback.
 
-The intended structure is simple: one folder per external service, with a resource file and one or more target files inside it.
+## Basic example
 
-## Installation
-
-Add the package to `Package.swift`:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/nerzh/swift-net-layer.git", .upToNextMajor(from: "1.0.0"))
-]
-```
-
-Then add the product to your app target:
-
-```swift
-.target(
-    name: "App",
-    dependencies: [
-        .product(name: "SwiftNetLayer", package: "swift-net-layer")
-    ]
-)
-```
-
-Import it where you describe your API:
-
-```swift
-import SwiftNetLayer
-```
-
-## Basic Structure
-
-Usually one external API gets one folder:
+This example describes a fictional users API at `https://api.example.com/v1`. Define the models and target first, then connect them to a resource:
 
 ```text
-Networking/
-  ExampleApi/
-    ExampleApi.swift
-    Targets/
-      UsersTarget.swift
-      BooksTarget.swift
-      ExampleModels.swift
+ExampleApi/
+  UserModels.swift
+  UsersTarget.swift
+  ExampleApi.swift
+  ExampleApi+Users.swift
 ```
 
-`ExampleApi.swift` is the resource. It knows the domain and default settings:
+### 1. Models — `UserModels.swift`
+
+`User` describes the response JSON. `CreateUserBody` describes the JSON sent when creating a user.
 
 ```swift
-import Foundation
-import SwiftNetLayer
-
-final class ExampleApi: SNLResource {
-    static let shared = ExampleApi(token: "<token>")
-
-    init(token: String) {
-        super.init(
-            protocol: .https,
-            domain: "api.example.com",
-            version: "v1",
-            defaultHeaders: [
-                "Authorization": "Bearer \(token)",
-                "Accept": "application/json"
-            ],
-            defaultParams: [
-                "locale": "en"
-            ],
-            requestPerSecondOptions: .init(
-                .init(requestLimit: 5, timeRangeLimitSecond: 1)
-            )
-        )
-    }
-
-    func users() -> UsersTarget {
-        UsersTarget(resource: self, path: "/users")
-    }
-
-    func books() -> BooksTarget {
-        BooksTarget(resource: self, path: "/books")
-    }
-}
-```
-
-The base URL is:
-
-```text
-https://api.example.com/v1
-```
-
-And `UsersTarget(resource: self, path: "/users")` sends requests relative to:
-
-```text
-https://api.example.com/v1/users
-```
-
-## Resource
-
-`SNLResource` stores shared settings for the whole service:
-
-```swift
-super.init(
-    provider: SNLProvider(),
-    protocol: .https,
-    domain: "api.example.com",
-    version: "v1",
-    defaultHeaders: [
-        "Authorization": "Bearer \(token)"
-    ],
-    defaultParams: [
-        "api_key": apiKey
-    ],
-    requestPerSecondOptions: .init(
-        .init(requestLimit: 10, timeRangeLimitSecond: 1)
-    )
-)
-```
-
-Common resource-level values:
-
-- `protocol` - `.http` or `.https`.
-- `domain` - host without the protocol, for example `api.example.com`. If your API uses part of the path as its base, values like `mainnet.infura.io/v3` are also valid.
-- `version` - optional path component, for example `v1` or `api/v2`.
-- `defaultHeaders` - auth token, `Accept`, or shared `Content-Type`.
-- `defaultParams` - params that should be included in every request, for example `api_key`.
-- `requestPerSecondOptions` - a simple limiter for APIs with request-per-second restrictions.
-
-If you pass `requestPerSecondOptions` directly, you may need to import `SwiftExtensionsPack`, because the limiter is wrapped in `SafeValue<RequestPerSecondOptions>`.
-
-## Target
-
-`SNLTarget` stores the path, headers, and params for a specific group of methods. For example, `/users`:
-
-```swift
-import Foundation
-import SwiftNetLayer
-
-final class UsersTarget: SNLTarget {
-    func list(limit: Int = 20) async throws -> [User] {
-        try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .get,
-            requestParams: [
-                "limit": limit
-            ]
-        )
-        .execute(model: [User].self)
-    }
-}
-```
-
-Usage:
-
-```swift
-let users = try await ExampleApi.shared.users().list(limit: 50)
-```
-
-If a target needs its own defaults, pass them when creating the target:
-
-```swift
-func users() -> UsersTarget {
-    UsersTarget(
-        resource: self,
-        path: "/users",
-        headers: [
-            "X-Feature": "new-users-api"
-        ],
-        params: [
-            "include_deleted": false
-        ]
-    )
-}
-```
-
-Headers and params are merged from three levels:
-
-```text
-Resource defaults -> Target defaults -> Request values
-```
-
-That means a concrete target method can override values defined at the resource or target level.
-
-If `body == nil` and `requestHeaders` does not contain `Content-Type`, the library adds `Content-Type: application/x-www-form-urlencoded` by default. For JSON requests, explicitly pass `"Content-Type": "application/json"` either on the resource or on the concrete request.
-
-## GET With Query Params
-
-`Targets/UsersTarget.swift`:
-
-```swift
-import Foundation
-import SwiftNetLayer
-
-struct User: Decodable {
+struct User: Decodable, Sendable {
     let id: Int
     let name: String
 }
 
+struct CreateUserBody: Encodable, Sendable {
+    let name: String
+}
+```
+
+### 2. Requests — `UsersTarget.swift`
+
+Each method returns an executor. Preparing a request does not send it; the caller chooses how to execute it and whether to decode the response.
+
+```swift
+import SwiftNetLayer
+
 final class UsersTarget: SNLTarget {
-    func list(page: Int, limit: Int) async throws -> [User] {
-        let params: SNLParams = [
-            "page": page,
-            "limit": limit
-        ]
-
-        return try await makeExecutor(
+    func list(page: Int = 1) -> SNLExecutorPrtcl {
+        makeExecutor(
             target: self,
             resource: resource,
             method: .get,
-            requestParams: params
+            requestParams: ["page": page]
         )
-        .execute(model: [User].self)
     }
-}
-```
 
-If the resource has `defaultParams: ["locale": "en"]`, the final request receives:
-
-```text
-?locale=en&page=1&limit=20
-```
-
-## Dynamic Path Parts
-
-If a path has a variable component, write it as `:id`, `:method`, or `:chain`, then pass replacements through `dynamicPathsParts`.
-
-Resource:
-
-```swift
-final class ExampleApi: SNLResource {
-    func userDetails() -> UserDetailsTarget {
-        UserDetailsTarget(resource: self, path: "/users/:id")
-    }
-}
-```
-
-Target:
-
-```swift
-final class UserDetailsTarget: SNLTarget {
-    func get(id: Int) async throws -> User {
-        try await makeExecutor(
+    func get(id: Int) -> SNLExecutorPrtcl {
+        makeExecutor(
             target: self,
             resource: resource,
             method: .get,
-            dynamicPathsParts: [
-                ":id": "\(id)"
-            ]
+            dynamicPathsParts: [":id": String(id)]
         )
-        .execute(model: User.self)
     }
-}
-```
 
-Usage:
-
-```swift
-let user = try await ExampleApi.shared.userDetails().get(id: 42)
-```
-
-Final path:
-
-```text
-/users/42
-```
-
-The same pattern is useful for APIs shaped like `/:chain/:method`:
-
-```swift
-func stats() async throws -> Stats {
-    try await makeExecutor(
-        target: self,
-        resource: resource,
-        method: .get,
-        dynamicPathsParts: [
-            ":chain": "bitcoin",
-            ":method": "stats"
-        ]
-    )
-    .execute(model: Stats.self)
-}
-```
-
-## POST With JSON Body
-
-For a JSON request, encode `Data` and pass it as `body`. You can define `Content-Type` at the resource level or on a concrete request.
-
-```swift
-struct CreateBookRequest: Encodable {
-    let title: String
-    let authorId: Int
-}
-
-struct Book: Decodable {
-    let id: Int
-    let title: String
-}
-
-final class BooksTarget: SNLTarget {
-    func create(title: String, authorId: Int) async throws -> Book {
-        let request = CreateBookRequest(title: title, authorId: authorId)
-        let body = try JSONEncoder().encode(request)
-
-        return try await makeExecutor(
+    func create(_ body: CreateUserBody) -> SNLExecutorPrtcl {
+        makeExecutor(
             target: self,
             resource: resource,
             method: .post,
-            requestHeaders: [
-                "Content-Type": "application/json"
-            ],
-            body: body
+            body: .json(body)
         )
-        .execute(model: Book.self)
     }
 }
 ```
 
-For JSON-RPC APIs, it is convenient to keep a helper on the resource:
+### 3. Resource — `ExampleApi.swift`
+
+The resource sets the base URL and defaults for every target. `SNLProvider` is used by default.
 
 ```swift
-struct JsonRpcRequest<Params: Encodable>: Encodable {
-    let jsonrpc = "2.0"
-    let id: Int
-    let method: String
-    let params: Params
+import SwiftNetLayer
+
+final class ExampleApi: SNLResource, @unchecked Sendable {
+    init() {
+        super.init(
+            protocol: .https,
+            domain: "api.example.com",
+            version: "v1",
+            defaultHeaders: [.accept: "application/json"]
+        )
+    }
 }
+```
+
+### 4. Target path — `ExampleApi+Users.swift`
+
+Connect the resource to the `UsersTarget` defined above. The target inherits its initializer from `SNLTarget`.
+
+```swift
+import SwiftNetLayer
 
 extension ExampleApi {
-    static func jsonRpcBody<Params: Encodable>(
-        id: Int = 1,
-        method: String,
-        params: Params
-    ) throws -> Data {
-        try JSONEncoder().encode(
-            JsonRpcRequest(id: id, method: method, params: params)
-        )
-    }
-}
-```
-
-Then use it in a target:
-
-```swift
-func balance(address: String) async throws -> BalanceResponse {
-    let body = try ExampleApi.jsonRpcBody(
-        method: "getBalance",
-        params: [address]
-    )
-
-    return try await makeExecutor(
-        target: self,
-        resource: resource,
-        method: .post,
-        requestHeaders: [
-            "Content-Type": "application/json"
-        ],
-        body: body
-    )
-    .execute(model: BalanceResponse.self)
-}
-```
-
-## Multipart And Files
-
-For multipart requests, pass `multipart: true` and a `files` dictionary.
-
-```swift
-struct UploadResponse: Decodable {
-    let id: String
-    let url: String
-}
-
-final class FilesTarget: SNLTarget {
-    func uploadImage(data: Data) async throws -> UploadResponse {
-        let file = SNLFile(
-            data: data,
-            fileName: "image.png",
-            mimeType: SNLMIMEType.imagePNG.description
-        )
-
-        return try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .post,
-            multipart: true,
-            requestParams: [
-                "folder": "avatars"
-            ],
-            files: [
-                "file": file
-            ]
-        )
-        .execute(model: UploadResponse.self)
-    }
-}
-```
-
-`requestParams` become regular multipart fields, and `files` become file fields.
-
-## Responses
-
-The most common option is decoding a `Decodable` model directly:
-
-```swift
-let user: User = try await ExampleApi.shared.userDetails().get(id: 1)
-```
-
-If you also need `URLResponse`:
-
-```swift
-let output: (User, URLResponse) = try await makeExecutor(
-    target: self,
-    resource: resource,
-    method: .get
-)
-.execute(model: User.self)
-
-let user = output.0
-let response = output.1
-```
-
-If you need raw data:
-
-```swift
-let data: Data = try await makeExecutor(
-    target: self,
-    resource: resource,
-    method: .get
-)
-.execute()
-```
-
-Callback-style methods are also available:
-
-```swift
-try makeExecutor(
-    target: self,
-    resource: resource,
-    method: .get
-)
-.execute(model: User.self) { user, response, error in
-    // Handle callback result.
-}
-```
-
-## Debug
-
-To print URL, method, headers, params, body, and the multipart flag:
-
-```swift
-let user: User = try await makeExecutor(
-    target: self,
-    resource: resource,
-    method: .get,
-    dynamicPathsParts: [
-        ":id": "42"
-    ]
-)
-.execute(model: User.self, debug: true)
-```
-
-The request information is printed to the console.
-
-## Timeouts
-
-Timeouts can be configured per request:
-
-```swift
-let receipt = try await makeExecutor(
-    target: self,
-    resource: resource,
-    method: .post,
-    body: body,
-    timeoutIntervalForRequest: 30,
-    timeoutIntervalForResource: 60
-)
-.execute(model: Receipt.self)
-```
-
-## Rate Limit
-
-If an API limits request frequency, define the limit on the resource:
-
-```swift
-final class BlockExplorerApi: SNLResource {
-    init(apiKey: String) {
-        super.init(
-            protocol: .https,
-            domain: "api.blockexplorer.example",
-            defaultParams: [
-                "key": apiKey
-            ],
-            requestPerSecondOptions: .init(
-                .init(
-                    requestLimit: 10,
-                    timeRangeLimitSecond: 1,
-                    retryDelaySecond: 100_000_000
-                )
-            )
-        )
-    }
-}
-```
-
-Before executing a request, `SNLExecutor` waits until a free request slot is available.
-
-## Complete Example: Users API
-
-`Networking/UsersApi/UsersApi.swift`:
-
-```swift
-import Foundation
-import SwiftNetLayer
-
-final class UsersApi: SNLResource {
-    static let shared = UsersApi(token: "<token>")
-
-    init(token: String) {
-        super.init(
-            protocol: .https,
-            domain: "api.example.com",
-            version: "v1",
-            defaultHeaders: [
-                "Authorization": "Bearer \(token)",
-                "Accept": "application/json"
-            ],
-            defaultParams: [
-                "client": "ios"
-            ]
-        )
-    }
-
     func users() -> UsersTarget {
-        UsersTarget(resource: self, path: "/users")
-    }
-
-    func user() -> UserTarget {
-        UserTarget(resource: self, path: "/users/:id")
+        UsersTarget(resource: self, path: "/users/:id")
     }
 }
 ```
 
-`Networking/UsersApi/Targets/UserModels.swift`:
+`:id` is an optional dynamic segment. `get(id:)` fills it in; `list()` and `create()` omit it, so their path becomes `/users`.
+
+### 5. Execute requests
+
+Use these calls in an async context. Reuse the same resource instance for its shared settings and request limit.
 
 ```swift
-import Foundation
-
-struct User: Codable {
-    let id: Int
-    let name: String
-    let email: String
-}
-
-struct CreateUserRequest: Encodable {
-    let name: String
-    let email: String
-}
-```
-
-`Networking/UsersApi/Targets/UsersTarget.swift`:
-
-```swift
-import Foundation
 import SwiftNetLayer
 
-final class UsersTarget: SNLTarget {
-    func list(search: String? = nil, page: Int = 1) async throws -> [User] {
-        var params: SNLParams = [
-            "page": page
-        ]
+let api = ExampleApi()
 
-        if let search {
-            params["search"] = search
-        }
+// GET /v1/users?page=1 — decode only the model.
+let users = try await api.users().list(page: 1)
+    .modelExecute(model: [User].self)
+print(users.count)
 
-        return try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .get,
-            requestParams: params
-        )
-        .execute(model: [User].self)
-    }
+// GET /v1/users/42 — keep both the model and HTTP response.
+let result = try await api.users().get(id: 42)
+    .execute(model: User.self)
+print(result.model.name, result.response.statusCode)
 
-    func create(name: String, email: String) async throws -> User {
-        let body = try JSONEncoder().encode(
-            CreateUserRequest(name: name, email: email)
-        )
-
-        return try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .post,
-            requestHeaders: [
-                "Content-Type": "application/json"
-            ],
-            body: body
-        )
-        .execute(model: User.self)
-    }
-}
+// POST /v1/users with {"name":"Ada"} — keep the raw HTTP response.
+let response = try await api.users().create(CreateUserBody(name: "Ada"))
+    .execute()
+print(response.statusCode, response.body.count)
 ```
 
-`Networking/UsersApi/Targets/UserTarget.swift`:
+## Responses and errors
+
+| Async call | Result |
+| --- | --- |
+| `try await executor.execute()` | `SNLHTTPResponse` |
+| `try await executor.execute(model: User.self)` | `(model: User, response: SNLHTTPResponse)` |
+| `try await executor.modelExecute(model: User.self)` | `User` |
+
+`SNLHTTPResponse` contains:
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `url` | `URL` | Response URL |
+| `statusCode` | `Int` | HTTP status code |
+| `headers` | `SNLHeader` | Response headers, for example `response.headers[.contentType]` |
+| `body` | `Data` | Response bytes; an empty body is valid and is not `nil` |
+
+The default provider returns HTTP responses regardless of status. A `400` or `500` does not automatically throw, and model decoding does not validate the status code. Check `response.statusCode` according to your API's rules.
+
+Async methods report transport, body encoding, and JSON decoding errors through `throws`. To inspect the status before decoding, use a custom `JSONDecoder`, or retain the response if decoding fails, call `execute()` first and decode `response.body` yourself.
+
+## Additional usage
+
+The examples below reuse `api`, `User`, and `CreateUserBody` from the basic example. Calls containing `try await` belong in an async context.
+
+### Dynamic paths
+
+A path segment starting with `:` is a placeholder. Pass its value through `dynamicPathsParts` in `makeExecutor`; dictionary keys include the colon.
+
+For a target with `path: "/users/:id/:action"`:
+
+| `dynamicPathsParts` | Resolved path |
+| --- | --- |
+| `nil` or `[:]` | `/users` |
+| `[":id": "42"]` | `/users/42` |
+| `[":id": "42", ":action": "posts"]` | `/users/42/posts` |
+| `[":id": ""]` | `/users` |
+| `[":id": "a/b"]` | `/users/a%2Fb` |
+
+Missing or empty values remove the corresponding segments. Pass unescaped values: each value is encoded as one path segment, including any `/`, `?`, or `#` characters. A static path such as `/health` needs no `dynamicPathsParts`.
+
+### Headers and query parameters
+
+Headers and query parameters are merged in this order; later values override earlier ones:
+
+```text
+Resource defaults → Target defaults → Request values
+```
+
+Header names use `SNLHeaderName`: standard names such as `.authorization` and `.accept`, or `.custom("X-Feature")`. Header name matching is case-insensitive.
 
 ```swift
-import Foundation
 import SwiftNetLayer
 
-final class UserTarget: SNLTarget {
-    func get(id: Int) async throws -> User {
-        try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .get,
-            dynamicPathsParts: [
-                ":id": "\(id)"
-            ]
-        )
-        .execute(model: User.self)
-    }
-
-    func delete(id: Int) async throws -> Data {
-        try await makeExecutor(
-            target: self,
-            resource: resource,
-            method: .delete,
-            dynamicPathsParts: [
-                ":id": "\(id)"
-            ]
-        )
-        .execute()
-    }
-}
-```
-
-App usage:
-
-```swift
-let users = try await UsersApi.shared.users().list(search: "oleh")
-let user = try await UsersApi.shared.user().get(id: users[0].id)
-let created = try await UsersApi.shared.users().create(
-    name: "Ada",
-    email: "ada@example.com"
+let resource = SNLResource(
+    protocol: .https,
+    domain: "api.example.com",
+    defaultHeaders: [
+        .authorization: "Bearer example-token",
+        .acceptLanguage: "en"
+    ],
+    defaultParams: ["locale": "en"]
 )
-```
 
-## Practical Tips
+let target = SNLTarget(
+    resource: resource,
+    path: "/users",
+    headers: [.custom("X-Feature"): "users"],
+    params: ["limit": 20]
+)
 
-- One external service should usually have one `SNLResource`.
-- One logical API section should usually have one `SNLTarget`: `UsersTarget`, `BooksTarget`, `WalletsTarget`, `RpcTarget`.
-- Keep methods that return ready-to-use app models inside target files.
-- Put shared headers and params on the resource.
-- Put section-specific headers and params on the target.
-- Put method-specific values in `requestParams`, `requestHeaders`, `body`, `files`, or `dynamicPathsParts`.
-- Do not keep real API keys in README files or repositories. Pass them through configuration, environment, Keychain, or dependency injection.
-
-## Quick Reference
-
-```swift
-makeExecutor(
-    target: self,
+let executor = target.makeExecutor(
+    target: target,
     resource: resource,
     method: .get,
-    multipart: false,
-    dynamicPathsParts: [":id": "42"],
-    requestHeaders: ["Content-Type": "application/json"],
-    requestParams: ["limit": 20],
-    body: body,
-    files: ["file": file],
-    timeoutIntervalForRequest: 30,
-    timeoutIntervalForResource: 60
+    requestHeaders: [.acceptLanguage: "fr"],
+    requestParams: ["limit": 50]
 )
 ```
 
-Execution methods:
+This request uses `Accept-Language: fr`, preserves the other headers, and sends `locale=en` and `limit=50` in the URL query.
+
+`defaultParams`, target `params`, and `requestParams` always become query parameters, including for POST requests. Use `body` for request content.
+
+### Request bodies and files
+
+Pass an `SNLBody` to `makeExecutor(body:)`:
+
+| Body | Example |
+| --- | --- |
+| JSON from an `Encodable` value | `.json(CreateUserBody(name: "Ada"))` |
+| URL-encoded form | `.form(["name": "Ada"])` |
+| Raw text | `.raw("Hello", contentType: "text/plain")` |
+| Raw bytes | `.raw(data: Data([0x01, 0x02]))` |
+| Multipart fields and files | `.multipart([.field(name: "name", value: "Ada")])` |
+
+With the default provider, the body determines `Content-Type`; JSON does not need manual encoding or a separate content-type header. An explicitly supplied, incompatible `Content-Type` produces an error. With `body: nil`, no body or content-type header is added automatically.
+
+This example creates a text attachment in memory and sends it alongside a regular multipart field:
 
 ```swift
-try await executor.execute()
-try await executor.execute(debug: true)
-try await executor.execute(model: User.self)
-try await executor.execute(model: User.self, debug: true)
-try executor.execute(model: User.self) { user, response, error in }
-try executor.waitExecute(model: User.self) { user, response, error in }
+import Foundation
+import SwiftNetLayer
+
+let file = SNLFile(
+    data: Data("Example attachment".utf8),
+    fileName: "note.txt",
+    mimeType: "text/plain"
+)
+
+let uploadTarget = SNLTarget(resource: api, path: "/uploads")
+let upload = uploadTarget.makeExecutor(
+    target: uploadTarget,
+    resource: api,
+    method: .post,
+    body: .multipart([
+        .field(name: "folder", value: "notes"),
+        .file(name: "attachment", file: file)
+    ])
+)
+let uploadResponse = try await upload.execute()
 ```
+
+Multipart fields belong in `.field` entries. `requestParams` still goes into the URL query.
+
+### Request rate limits
+
+Set `requestPerSecondOptions` when constructing a resource or in your resource's `super.init`:
+
+```swift
+import SwiftNetLayer
+import SwiftExtensionsPack
+
+let limitedResource = SNLResource(
+    protocol: .https,
+    domain: "api.example.com",
+    requestPerSecondOptions: SafeValue(
+        RequestPerSecondOptions(requestLimit: 5, timeRangeLimitSecond: 1)
+    )
+)
+let limitedUsers = UsersTarget(resource: limitedResource, path: "/users/:id")
+```
+
+This allows five request starts per fixed one-second window, shared by all targets using this resource. It does not limit the number of requests already in flight or retry failed requests. Omit the options to disable the limiter.
+
+When the limit is reached, async execution suspends while waiting for a slot. Callback execution and `waitExecute` block the calling thread while waiting for a slot.
+
+`retryDelaySecond` controls the interval between slot checks. Despite its name, its unit is **nanoseconds**; the default `10_000_000` is 10 ms.
+
+### Timeouts and debugging
+
+Set timeouts in seconds through `makeExecutor` or on a prepared executor:
+
+```swift
+var request = api.users().get(id: 42)
+request.timeoutIntervalForRequest = 15
+request.timeoutIntervalForResource = 60
+
+let timedResponse = try await request.execute(debug: true)
+```
+
+Unset timeouts use the provider's session configuration. With the default provider, `debug: true` prints request and response details, including headers and body. It is also available on model and callback execution methods.
+
+### Callbacks and synchronous waiting
+
+Callback methods and their handlers do not throw. Errors are delivered through the `error` argument. Closures are `@Sendable`; models decoded by callback methods must be `Decodable & Sendable`.
+
+```swift
+api.users().get(id: 42).execute(model: User.self) { user, response, error in
+    if let error {
+        print(error)
+        return
+    }
+    guard let user, let response else { return }
+    print(user.name, response.statusCode)
+}
+```
+
+The raw callback overload receives `(SNLHTTPResponse?, SNLError?)`. The model overload receives `(Model?, SNLHTTPResponse?, SNLError?)`; if decoding fails, the HTTP response remains available alongside the error. Callback delivery is controlled by the provider; callbacks are not guaranteed to run on the main thread.
+
+`waitExecute` accepts the same callbacks and blocks until the handler finishes:
+
+```swift
+api.users().get(id: 42).waitExecute { response, error in
+    if let error {
+        print(error)
+        return
+    }
+    if let response {
+        print(response.statusCode)
+    }
+}
+```
+
+If the current queue matches the provider's declared callback queue, `waitExecute` reports an error without sending the request. This prevents waiting inside one callback for another callback that needs the same queue. Use async/await or ordinary callbacks for request chains.
+
+### Custom providers
+
+Pass a provider through `SNLResource(provider: ...)` to replace the transport. Implement [`SNLProviderPrtcl`](Sources/SwiftNetLayer/Provider/SNL+ProviderPrtcl.swift): `init()`, both `executeRequest` methods, and `callbackContext`. There are no default protocol implementations. Return `SNLHTTPResponse` with the URL, status, headers, and body supplied by your transport.
+
+`callbackContext` describes callback delivery for the executor's synchronous-wait check; it does not schedule callbacks:
+
+| Context | `waitExecute` behavior |
+| --- | --- |
+| `.dispatchQueue(queue)` | Rejects waiting from the declared dispatch queue |
+| `.operationQueue(queue)` | Rejects waiting from the declared operation queue or its underlying dispatch queue |
+| `.waitUnsupported` | Always reports an error without sending; ordinary callback and async execution remain available |
+| `.unchecked` | Skips the queue check; the provider author is responsible for safe synchronous waiting |
+
+The default `SNLProvider` declares its session's delegate queue. To use your own `URLSession`, construct `SNLProvider(session:)`; import `FoundationNetworking` conditionally on platforms where it is available.
