@@ -198,11 +198,12 @@ private struct CallbackTestProvider: SNLProviderPrtcl {
     let data: Data?
     let error: SNLError?
     let delivery: Delivery
+    private let callbackQueue = DispatchQueue(label: "SwiftNetLayerTests.callback-provider")
 
     var callbackContext: SNLCallbackContext {
         switch delivery {
         case .synchronous: return .unchecked
-        case .asynchronous: return .dispatchQueue(.global())
+        case .asynchronous: return .dispatchQueue(callbackQueue)
         }
     }
 
@@ -233,7 +234,7 @@ private struct CallbackTestProvider: SNLProviderPrtcl {
         case .synchronous:
             handler(response, error)
         case .asynchronous:
-            DispatchQueue.global().async {
+            callbackQueue.async {
                 handler(response, error)
             }
         }

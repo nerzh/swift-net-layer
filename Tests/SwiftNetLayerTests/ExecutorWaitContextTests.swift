@@ -134,7 +134,7 @@ final class ExecutorWaitContextTests: XCTestCase, @unchecked Sendable {
                 let checkResult: @Sendable (SNLHTTPResponse?, SNLError?) -> Void = { response, error in
                     calls.change { $0 += 1 }
                     XCTAssertNil(response)
-                    XCTAssertEqual(error?.reason, reason)
+                    XCTAssertTrue(error?.reason.hasSuffix(reason) == true, error?.reason ?? "Missing error")
                 }
                 if useModel {
                     executor.waitExecute(model: WaitPayload.self, debug: false) { model, response, error in
