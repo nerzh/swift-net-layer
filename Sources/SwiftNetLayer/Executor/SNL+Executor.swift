@@ -221,19 +221,23 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     }
 
     private func awaitAvailableSlotForRequest() {
-        guard let requestPerSecondOptions = resource.requestPerSecondOptions else { return }
-        let delayBeforRetryRequest = requestPerSecondOptions.value.retryDelaySecond
-        while !resource.allowRequest {
-            Thread.sleep(forTimeInterval: TimeInterval(delayBeforRetryRequest) / 1_000_000_000)
+        while let delay = nanosecondsUntilRequestSlotRetry() {
+            if delay > 0 {
+                Thread.sleep(forTimeInterval: TimeInterval(delay) / 1_000_000_000)
+            }
         }
     }
     
     private func awaitAvailableSlotForRequest() async throws {
-        guard let requestPerSecondOptions = resource.requestPerSecondOptions else { return }
-        let delayBeforRetryRequest = requestPerSecondOptions.value.retryDelaySecond
-        while !resource.allowRequest {
-            try await Task.sleep(nanoseconds: UInt64(delayBeforRetryRequest))
+        while let delay = nanosecondsUntilRequestSlotRetry() {
+            try await Task.sleep(nanoseconds: delay)
         }
+    }
+
+    private func nanosecondsUntilRequestSlotRetry() -> UInt64? {
+        guard let deadline = resource.acquireRequestSlotOrRetryAt() else { return nil }
+        let now = DispatchTime.now().uptimeNanoseconds
+        return deadline - min(deadline, now)
     }
 }
 

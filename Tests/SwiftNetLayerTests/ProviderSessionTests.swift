@@ -125,7 +125,7 @@ final class ProviderSessionTests: XCTestCase, @unchecked Sendable {
 
                     XCTAssertEqual(calls.value, 1)
                     XCTAssertEqual(encodings.value, 0)
-                    XCTAssertTrue(resource.allowRequest)
+                    XCTAssertNil(resource.acquireRequestSlotOrRetryAt())
                     finished.fulfill()
                 }
 

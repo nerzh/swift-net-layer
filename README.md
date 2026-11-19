@@ -275,9 +275,7 @@ let limitedUsers = UsersTarget(resource: limitedResource, path: "/users/:id")
 
 This allows five request starts per fixed one-second window, shared by all targets using this resource. It does not limit the number of requests already in flight or retry failed requests. Omit the options to disable the limiter.
 
-When the limit is reached, async execution suspends while waiting for a slot. Callback execution and `waitExecute` block the calling thread while waiting for a slot.
-
-`retryDelaySecond` controls the interval between slot checks. Despite its name, its unit is **nanoseconds**; the default `10_000_000` is 10 ms.
+When an `SNLResource` reaches its limit, each waiting request tries to acquire a slot again at the next window boundary. Async execution suspends while waiting. Callback execution and `waitExecute` block the calling thread while waiting for a slot.
 
 ### Timeouts and debugging
 

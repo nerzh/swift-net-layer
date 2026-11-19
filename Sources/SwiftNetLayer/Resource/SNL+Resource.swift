@@ -14,25 +14,29 @@ public struct RequestPerSecondOptions {
     var windowStartNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
     public var requestLimit: UInt
     public var timeRangeLimitSecond: UInt
-    /// nanoseconds - delay before retry request; default: 0.01 s
-    public var retryDelaySecond: UInt32
-    
-    public init(requestLimit: UInt = 100, timeRangeLimitSecond: UInt = 1, retryDelaySecond: UInt32 = 10_000_000) {
+
+    public init(requestLimit: UInt = 100, timeRangeLimitSecond: UInt = 1) {
         self.requestLimit = requestLimit
         self.timeRangeLimitSecond = timeRangeLimitSecond
-        self.retryDelaySecond = retryDelaySecond
     }
 
-    mutating func allowRequest(at uptimeNanoseconds: UInt64) -> Bool {
+    mutating func acquireRequestSlotOrRetryAt(at uptimeNanoseconds: UInt64) -> UInt64? {
+        let nanosecondsPerSecond: UInt64 = 1_000_000_000
+        let windowSeconds = UInt64(timeRangeLimitSecond)
         if uptimeNanoseconds < windowStartNanoseconds ||
-            (uptimeNanoseconds - windowStartNanoseconds) / 1_000_000_000 >= UInt64(timeRangeLimitSecond) {
+            (uptimeNanoseconds - windowStartNanoseconds) / nanosecondsPerSecond >= windowSeconds {
             windowStartNanoseconds = uptimeNanoseconds
             requestCounter = 0
         }
 
-        guard requestCounter < requestLimit else { return false }
+        guard requestCounter < requestLimit else {
+            guard windowSeconds > 0 else { return .max }
+            let (windowNanoseconds, durationOverflow) = windowSeconds.multipliedReportingOverflow(by: nanosecondsPerSecond)
+            let (deadline, deadlineOverflow) = windowStartNanoseconds.addingReportingOverflow(windowNanoseconds)
+            return durationOverflow || deadlineOverflow ? .max : deadline
+        }
         requestCounter += 1
-        return true
+        return nil
     }
 }
 
@@ -49,12 +53,11 @@ open class SNLResource: SNLResourcePrtcl, @unchecked Sendable {
         return url
     }
     
-    /// Request Per Second WatchDog
     public let requestPerSecondOptions: SafeValue<RequestPerSecondOptions>?
-    public var allowRequest: Bool {
-        guard let requestPerSecondOptions else { return true }
-        return requestPerSecondOptions.change { options in
-            options.allowRequest(at: DispatchTime.now().uptimeNanoseconds)
+
+    public func acquireRequestSlotOrRetryAt() -> UInt64? {
+        requestPerSecondOptions?.change { options in
+            options.acquireRequestSlotOrRetryAt(at: DispatchTime.now().uptimeNanoseconds)
         }
     }
 

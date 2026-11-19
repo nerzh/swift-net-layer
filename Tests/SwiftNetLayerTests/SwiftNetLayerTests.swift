@@ -1,3 +1,4 @@
+import Dispatch
 import XCTest
 import SwiftNetLayer
 #if canImport(FoundationNetworking)
@@ -295,6 +296,25 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
             let request = try await capture(executor, callback: callback)
             XCTAssertEqual(request.contentType, "application/json")
             XCTAssertFalse(request.body.isEmpty)
+        }
+    }
+
+    func testAsyncAndCallbackExecutorsRetryAtTheRateLimitWindowBoundary() async throws {
+        for callback in [false, true] {
+            let resource = SNLResource(
+                provider: TimeoutProvider(), domain: "swift-net-layer.test",
+                requestPerSecondOptions: .init(.init(requestLimit: 1))
+            )
+            let target = SNLTarget(resource: resource, path: "/rate-limit")
+            let executor = target.makeExecutor(target: target, resource: resource, method: .get)
+            XCTAssertNil(resource.acquireRequestSlotOrRetryAt())
+            let deadline = try XCTUnwrap(resource.acquireRequestSlotOrRetryAt())
+
+            _ = try await capture(executor, callback: callback)
+
+            let completedAt = DispatchTime.now().uptimeNanoseconds
+            XCTAssertGreaterThanOrEqual(completedAt, deadline)
+            XCTAssertLessThan(completedAt, deadline + 2_000_000_000)
         }
     }
 

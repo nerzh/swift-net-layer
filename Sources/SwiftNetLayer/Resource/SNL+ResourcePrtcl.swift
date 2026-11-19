@@ -17,8 +17,9 @@ public protocol SNLResourcePrtcl: Sendable {
     var defaultHeaders: SNLHeader? { get }
     var defaultParams: SafeValue<[String: Any]?> { get }
     var url: URL { get }
-    var requestPerSecondOptions: SafeValue<RequestPerSecondOptions>? { get }
-    var allowRequest: Bool { get }
+
+    /// Returns nil when the request can start, or the retry deadline in monotonic uptime nanoseconds.
+    func acquireRequestSlotOrRetryAt() -> UInt64?
 }
 
 public extension SNLResourcePrtcl {
