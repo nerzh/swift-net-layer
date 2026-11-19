@@ -199,6 +199,13 @@ private struct CallbackTestProvider: SNLProviderPrtcl {
     let error: SNLError?
     let delivery: Delivery
 
+    var callbackContext: SNLCallbackContext {
+        switch delivery {
+        case .synchronous: return .unchecked
+        case .asynchronous: return .dispatchQueue(.global())
+        }
+    }
+
     init() {
         self.init(delivery: .synchronous)
     }
@@ -230,6 +237,12 @@ private struct CallbackTestProvider: SNLProviderPrtcl {
                 handler(response, error)
             }
         }
+    }
+
+    func executeRequest(resource: SNLResourcePrtcl, request: SNLRequestPrtcl, debug: Bool) async throws -> SNLHTTPResponse {
+        if let error { throw error }
+        guard let data else { throw SNLError("Missing HTTP response") }
+        return SNLHTTPResponse(url: request.path, statusCode: 200, body: data)
     }
 }
 

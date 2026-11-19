@@ -366,6 +366,8 @@ extension EchoURLProtocol: @unchecked Sendable {}
 #endif
 
 private struct TimeoutProvider: SNLProviderPrtcl {
+    let callbackContext: SNLCallbackContext = .unchecked
+
     init() {}
 
     func executeRequest(

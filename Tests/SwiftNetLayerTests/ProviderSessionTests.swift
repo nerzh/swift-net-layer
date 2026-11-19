@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import SwiftExtensionsPack
 import SwiftNetLayer
@@ -17,6 +18,119 @@ final class ProviderSessionTests: XCTestCase, @unchecked Sendable {
 
     func testBothTimeoutsPreserveDelegateAndQueue() async throws {
         try await checkTimeoutSession(requestTimeout: 17, resourceTimeout: 23)
+    }
+
+    func testWaitExecuteRejectsCallsOnSessionDelegateQueue() async {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        let session = URLSession(configuration: .ephemeral, delegate: nil, delegateQueue: queue)
+        defer { session.invalidateAndCancel() }
+
+        await checkWaitExecuteRejection(session: session) { operation in
+            queue.addOperation(operation)
+        }
+    }
+
+    func testWaitExecuteRejectsCallsOnMainDelegateQueue() async {
+        let session = URLSession(configuration: .ephemeral, delegate: nil, delegateQueue: .main)
+        defer { session.invalidateAndCancel() }
+
+        await checkWaitExecuteRejection(session: session) { operation in
+            DispatchQueue.main.async(execute: operation)
+        }
+    }
+
+    func testWaitExecuteRejectsCallsOnUnderlyingDelegateQueue() async {
+        let underlyingQueue = DispatchQueue(label: "SwiftNetLayerTests.session-delegate")
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.underlyingQueue = underlyingQueue
+        let session = URLSession(configuration: .ephemeral, delegate: nil, delegateQueue: queue)
+        defer { session.invalidateAndCancel() }
+
+        await checkWaitExecuteRejection(session: session) { operation in
+            underlyingQueue.async(execute: operation)
+        }
+    }
+
+    func testWaitExecuteCompletesWhenCalledOutsideDelegateQueue() async {
+        let backgroundQueue = OperationQueue()
+        backgroundQueue.maxConcurrentOperationCount = 1
+
+        for queue in [backgroundQueue, OperationQueue.main] {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [SessionTestURLProtocol.self]
+            let session = URLSession(configuration: configuration, delegate: nil, delegateQueue: queue)
+            defer { session.invalidateAndCancel() }
+            let finished = expectation(description: "Waiting outside the delegate queue finishes")
+            let calls = SafeValue(0)
+
+            DispatchQueue.global().async {
+                let resource = SNLResource(provider: SNLProvider(session: session), domain: "swift-net-layer.test")
+                let target = SNLTarget(resource: resource, path: "/session")
+                let executor = target.makeExecutor(target: target, resource: resource, method: .get)
+                executor.waitExecute { response, error in
+                    calls.change { $0 += 1 }
+                    XCTAssertEqual(response?.body, Data("ok".utf8))
+                    XCTAssertNil(error)
+                    XCTAssertTrue(OperationQueue.current === queue)
+                }
+                XCTAssertEqual(calls.value, 1)
+                finished.fulfill()
+            }
+
+            await fulfillment(of: [finished], timeout: 2)
+            XCTAssertEqual(calls.value, 1)
+        }
+    }
+
+    private func checkWaitExecuteRejection(
+        session: URLSession,
+        schedule: @Sendable (@escaping @Sendable () -> Void) -> Void
+    ) async {
+        for useModel in [false, true] {
+            for overrideTimeout in [false, true] {
+                let finished = expectation(description: "Unsafe wait is rejected before starting a request")
+                let encodings = SafeValue(0)
+                let calls = SafeValue(0)
+
+                schedule {
+                    let resource = SNLResource(
+                        provider: SNLProvider(session: session), domain: "swift-net-layer.test",
+                        requestPerSecondOptions: SafeValue(RequestPerSecondOptions(requestLimit: 1, timeRangeLimitSecond: 3600))
+                    )
+                    let target = SNLTarget(resource: resource, path: "/session")
+                    let executor = target.makeExecutor(
+                        target: target, resource: resource, method: .post,
+                        body: .json(WaitGuardBody(encodings: encodings)),
+                        timeoutIntervalForRequest: overrideTimeout ? 17 : nil
+                    )
+                    let checkResult: @Sendable (SNLHTTPResponse?, SNLError?) -> Void = { response, error in
+                        calls.change { $0 += 1 }
+                        XCTAssertNil(response)
+                        XCTAssertEqual(error?.reason, "waitExecute cannot block the provider callback queue; use execute instead")
+                    }
+
+                    if useModel {
+                        executor.waitExecute(model: String.self) { model, response, error in
+                            XCTAssertNil(model)
+                            checkResult(response, error)
+                        }
+                    } else {
+                        executor.waitExecute(checkResult)
+                    }
+
+                    XCTAssertEqual(calls.value, 1)
+                    XCTAssertEqual(encodings.value, 0)
+                    XCTAssertTrue(resource.allowRequest)
+                    finished.fulfill()
+                }
+
+                await fulfillment(of: [finished], timeout: 2)
+                XCTAssertEqual(calls.value, 1)
+                XCTAssertEqual(encodings.value, 0)
+            }
+        }
     }
 
     private func checkTimeoutSession(requestTimeout: TimeInterval?, resourceTimeout: TimeInterval?) async throws {
@@ -90,6 +204,16 @@ final class ProviderSessionTests: XCTestCase, @unchecked Sendable {
         }
 
         return try await provider.executeRequest(resource: resource, request: request, debug: false).body
+    }
+}
+
+private struct WaitGuardBody: Encodable {
+    let encodings: SafeValue<Int>
+
+    func encode(to encoder: Encoder) throws {
+        encodings.change { $0 += 1 }
+        // Fail synchronously if the guard regresses so the test cannot deadlock.
+        throw SNLError("The request body must not be encoded on the delegate queue")
     }
 }
 

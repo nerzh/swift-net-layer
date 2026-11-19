@@ -10,6 +10,8 @@ import Foundation
 public protocol SNLProviderPrtcl: Sendable {
     
     init()
+
+    var callbackContext: SNLCallbackContext { get }
     
     func executeRequest(
         resource: SNLResourcePrtcl,
@@ -24,25 +26,4 @@ public protocol SNLProviderPrtcl: Sendable {
         request: SNLRequestPrtcl,
         debug: Bool
     ) async throws -> SNLHTTPResponse
-}
-
-
-public extension SNLProviderPrtcl {
-    func executeRequest(
-        resource: SNLResourcePrtcl,
-        request: SNLRequestPrtcl,
-        debug: Bool = false,
-        _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void = { _, _ in }
-    ) {
-        SNLProvider().executeRequest(resource: resource, request: request, debug: debug, handler)
-    }
-
-    @discardableResult
-    func executeRequest(
-        resource: SNLResourcePrtcl,
-        request: SNLRequestPrtcl,
-        debug: Bool = false
-    ) async throws -> SNLHTTPResponse {
-        try await SNLProvider().executeRequest(resource: resource, request: request, debug: debug)
-    }
 }

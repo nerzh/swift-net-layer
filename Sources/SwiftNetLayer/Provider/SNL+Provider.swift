@@ -23,6 +23,8 @@ public final class SNLProvider: SNLProviderPrtcl {
         self.session = session
     }
 
+    public var callbackContext: SNLCallbackContext { .operationQueue(session.delegateQueue) }
+
     private func fullURL(_ resource: SNLResourcePrtcl, _ request: SNLRequestPrtcl) -> URL {
         var path = request.path.absoluteString
         if !path["^\\/"] { path = "/\(path)" }

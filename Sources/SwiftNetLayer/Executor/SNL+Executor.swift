@@ -116,6 +116,10 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     }
 
     public func waitExecute(debug: Bool, _ handler: @escaping @Sendable (SNLHTTPResponse?, SNLError?) -> Void) {
+        if let error = waitExecutionError {
+            handler(nil, error)
+            return
+        }
         let waitGroup = DispatchGroup()
         waitGroup.enter()
         execute(debug: debug) { response, error in
@@ -134,6 +138,10 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         debug: Bool,
         _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
     ) {
+        if let error = waitExecutionError {
+            handler(nil, nil, error)
+            return
+        }
         let waitGroup = DispatchGroup()
         waitGroup.enter()
         execute(model: model, debug: debug) { model, response, error in
@@ -148,6 +156,42 @@ public struct SNLExecutor: SNLExecutorPrtcl {
         _ handler: @escaping @Sendable (ResponseModel?, SNLHTTPResponse?, SNLError?) -> Void
     ) {
         waitExecute(model: model, debug: false, handler)
+    }
+
+    private var waitExecutionError: SNLError? {
+        switch resource.provider.callbackContext {
+        case .waitUnsupported:
+            return SNLError("This provider does not support waitExecute; use execute instead")
+        case .unchecked:
+            return nil
+        case let .dispatchQueue(queue):
+            guard isExecuting(on: queue) else { return nil }
+        case let .operationQueue(queue):
+            guard isExecuting(on: queue) else { return nil }
+        }
+        return SNLError("waitExecute cannot block the provider callback queue; use execute instead")
+    }
+
+    private func isExecuting(on operationQueue: OperationQueue) -> Bool {
+        if OperationQueue.current === operationQueue {
+            return true
+        }
+        let isMainQueue = operationQueue === OperationQueue.main
+        if isMainQueue && Thread.isMainThread {
+            return true
+        }
+        guard let queue = isMainQueue ? DispatchQueue.main : operationQueue.underlyingQueue else {
+            return false
+        }
+        return isExecuting(on: queue)
+    }
+
+    private func isExecuting(on queue: DispatchQueue) -> Bool {
+        let key = DispatchSpecificKey<Bool>()
+        queue.setSpecific(key: key, value: true)
+        defer { queue.setSpecific(key: key, value: nil) }
+        return DispatchQueue.getSpecific(key: key) == true ||
+            (Thread.isMainThread && DispatchQueue.main.getSpecific(key: key) == true)
     }
 
     private func makeRequest() -> SNLRequestPrtcl {
