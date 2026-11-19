@@ -64,6 +64,47 @@ final class DynamicPathTests: XCTestCase {
         }
     }
 
+    func testRepeatedPathSeparatorsAreCollapsedAfterSubstitution() throws {
+        let cases: [(template: String, parts: [String: String]?, expected: String)] = [
+            ("/:id//users", nil, "/users"),
+            ("/:id///users", [":id": ""], "/users"),
+            ("/users///:id//posts//", [":id": "42"], "/users/42/posts/"),
+            ("/:first////:second///", [:], "/"),
+            ("users///:id//posts", nil, "users/posts"),
+            ("/:id//users", [":id": "a//b"], "/a%2F%2Fb/users"),
+            ("/files/a%2F%2Fb///:id", [":id": "x//y"], "/files/a%2F%2Fb/x%2F%2Fy")
+        ]
+
+        for entry in cases {
+            let request = SNLRequest(
+                method: .get, path: try XCTUnwrap(URL(string: entry.template)),
+                dynamicPathsParts: entry.parts
+            )
+            XCTAssertEqual(request.path.absoluteString, entry.expected, entry.template)
+        }
+    }
+
+    func testPathNormalizationPreservesSchemeQueryAndFragment() throws {
+        var request = SNLRequest(
+            method: .get,
+            path: try XCTUnwrap(URL(string: "https://example.test/:id///users//:section?next=https://other.test/a//b#part//anchor")),
+            dynamicPathsParts: [":section": "a//b"]
+        )
+        XCTAssertEqual(
+            request.path.absoluteString,
+            "https://example.test/users/a%2F%2Fb?next=https://other.test/a//b#part//anchor"
+        )
+
+        request.dynamicPathsParts[":id"] = "42"
+        XCTAssertEqual(
+            request.path.absoluteString,
+            "https://example.test/42/users/a%2F%2Fb?next=https://other.test/a//b#part//anchor"
+        )
+
+        request.dynamicPathsParts = [:]
+        XCTAssertEqual(request.path.absoluteString, "https://example.test/users/?next=https://other.test/a//b#part//anchor")
+    }
+
     func testAssigningPathReplacesTemplate() throws {
         var request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/users/:id")),

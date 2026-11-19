@@ -72,6 +72,7 @@ public struct SNLRequest: SNLRequestPrtcl {
             return encodedValue
         }
         var resolvedPath = resolvedParts.joined(separator: "/")
+            .replacingOccurrences(of: "/{2,}", with: "/", options: .regularExpression)
         if resolvedPath.isEmpty && components.percentEncodedPath.hasPrefix("/") {
             resolvedPath = "/"
         }

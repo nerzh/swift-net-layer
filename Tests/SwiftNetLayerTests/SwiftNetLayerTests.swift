@@ -5,6 +5,25 @@ import FoundationNetworking
 #endif
 
 final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
+    func testRepeatedSlashesAfterMissingDynamicSegmentAreNormalizedInRequests() async throws {
+        let target = SNLTarget(
+            resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test", version: "v1"),
+            path: "/:id//users///:section?next=https://example.test/a//b#part//anchor"
+        )
+        let executor = target.makeExecutor(
+            target: target, resource: target.resource, method: .get,
+            dynamicPathsParts: [":section": "a//b"]
+        )
+
+        for callback in [false, true] {
+            let request = try await capture(executor, callback: callback)
+            let url = try XCTUnwrap(URLComponents(string: request.url))
+            XCTAssertEqual(url.percentEncodedPath, "/v1/users/a%2F%2Fb")
+            XCTAssertEqual(request.queryValues("next"), ["https://example.test/a//b"])
+            XCTAssertEqual(url.fragment, "part//anchor")
+        }
+    }
+
     func testDynamicPathEncodingSurvivesAsyncAndCallbackRequests() async throws {
         let target = SNLTarget(
             resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test", version: "v1"),
