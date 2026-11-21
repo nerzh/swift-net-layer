@@ -12,6 +12,11 @@ import SwiftRegularExpression
 import FoundationNetworking
 #endif
 
+private enum PreparedRequest {
+    case raw(URLRequest)
+    case encoded(url: String, method: String, headers: [String: String]?, params: [String: Any]?, body: NetBody?)
+}
+
 public final class SNLProvider: SNLProviderPrtcl {
     private let session: URLSession
 
@@ -135,11 +140,6 @@ public final class SNLProvider: SNLProviderPrtcl {
     private func makeNetHeaders(_ headers: SNLHeader?) -> [String: String]? {
         guard let headers else { return nil }
         return Dictionary(uniqueKeysWithValues: headers.map { ($0.key.rawValue, $0.value) })
-    }
-
-    private enum PreparedRequest {
-        case raw(URLRequest)
-        case encoded(url: String, method: String, headers: [String: String]?, params: [String: Any]?, body: NetBody?)
     }
 
     private func prepareRequest(_ resource: SNLResourcePrtcl, _ request: SNLRequestPrtcl) throws -> PreparedRequest {
