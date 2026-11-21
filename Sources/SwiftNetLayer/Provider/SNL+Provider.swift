@@ -46,13 +46,7 @@ public final class SNLProvider: SNLProviderPrtcl {
 
         let safeRequest = SafeValue(request)
 
-        Net.sendRequest(url: fullURL(resource, request).absoluteString,
-                            method: request.method.rawValue.uppercased(),
-                            headers: makeNetHeaders(request.headers),
-                            queryParams: request.params,
-                            body: makeNetBody(request.body),
-                            session: session ?? self.session
-        ) { (data: Data?, urlResponse: URLResponse?, error: Error?) in
+        let completion: @Sendable (Data?, URLResponse?, Error?) -> Void = { data, urlResponse, error in
             if
                 debug,
                 let data, let urlResponse
@@ -78,6 +72,19 @@ public final class SNLProvider: SNLProviderPrtcl {
 
             handler(response, nil)
         }
+
+        let activeSession = session ?? self.session
+        do {
+            switch try prepareRequest(resource, request) {
+            case let .raw(urlRequest):
+                activeSession.dataTask(with: urlRequest, completionHandler: completion).resume()
+            case let .encoded(url, method, headers, params, body):
+                Net.sendRequest(url: url, method: method, headers: headers, queryParams: params,
+                                body: body, session: activeSession, completion)
+            }
+        } catch {
+            handler(nil, SNLError(error))
+        }
     }
 
     @discardableResult
@@ -89,12 +96,16 @@ public final class SNLProvider: SNLProviderPrtcl {
         let session = reconfigureSession(request)
         defer { session?.finishTasksAndInvalidate() }
 
-        let response = try await Net.sendRequest(url: fullURL(resource, request).absoluteString,
-                                                 method: request.method.rawValue.uppercased(),
-                                                 headers: makeNetHeaders(request.headers),
-                                                 queryParams: request.params,
-                                                 body: makeNetBody(request.body),
-                                                 session: session ?? self.session)
+        let activeSession = session ?? self.session
+        let response: (data: Data, response: URLResponse)
+        switch try prepareRequest(resource, request) {
+        case let .raw(urlRequest):
+            try Task.checkCancellation()
+            response = try await activeSession.data(for: urlRequest)
+        case let .encoded(url, method, headers, params, body):
+            response = try await Net.sendRequest(url: url, method: method, headers: headers, queryParams: params,
+                                                 body: body, session: activeSession)
+        }
 
         if debug {
             printDebugInfo(resource: resource, request: request, response: response)
@@ -126,17 +137,37 @@ public final class SNLProvider: SNLProviderPrtcl {
         return Dictionary(uniqueKeysWithValues: headers.map { ($0.key.rawValue, $0.value) })
     }
 
-    private func makeNetBody(_ body: SNLBody?) -> NetBody? {
-        guard let body else { return nil }
-        switch body {
-        case let .raw(data, contentType):
-            return .raw(data: data, contentType: .custom(contentType))
+    private enum PreparedRequest {
+        case raw(URLRequest)
+        case encoded(url: String, method: String, headers: [String: String]?, params: [String: Any]?, body: NetBody?)
+    }
+
+    private func prepareRequest(_ resource: SNLResourcePrtcl, _ request: SNLRequestPrtcl) throws -> PreparedRequest {
+        let url = fullURL(resource, request)
+        let method = request.method.description
+        let headers = makeNetHeaders(request.headers)
+        let body: NetBody?
+        switch request.body {
+        case nil:
+            body = nil
+        case let .raw(bytes):
+            guard let contentType = request.headers?[.contentType] else {
+                // NetBody.raw always supplies a MIME type. Leave the header to URLSession here.
+                var urlRequest = URLRequest(url: try appendingQueryParams(request.params, to: url))
+                urlRequest.httpMethod = method
+                urlRequest.allHTTPHeaderFields = headers
+                urlRequest.httpBody = bytes
+                return .raw(urlRequest)
+            }
+            body = .raw(data: bytes, contentType: .custom(contentType))
+        case let .data(bytes, contentType):
+            body = .raw(data: bytes, contentType: .custom(contentType.rawValue))
         case let .json(value):
-            return .json(value)
+            body = .json(value)
         case let .form(fields):
-            return .form(fields)
+            body = .form(fields)
         case let .multipart(parts):
-            return .multipart(parts.map { part in
+            body = .multipart(parts.map { part in
                 switch part {
                 case let .field(name, value):
                     return .field(name: name, value: value)
@@ -147,6 +178,20 @@ public final class SNLProvider: SNLProviderPrtcl {
                 }
             })
         }
+        return .encoded(url: url.absoluteString, method: method, headers: headers, params: request.params, body: body)
+    }
+
+    private func appendingQueryParams(_ params: SNLParams?, to url: URL) throws -> URL {
+        let query = Net.paramsString(params)
+        guard !query.isEmpty else { return url }
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw Net.NetErrors.NotValidParams
+        }
+        let existing = components.percentEncodedQuery ?? ""
+        let separator = existing.isEmpty || existing.hasSuffix("&") ? "" : "&"
+        components.percentEncodedQuery = existing + separator + query
+        guard let result = components.url else { throw Net.NetErrors.NotValidParams }
+        return result
     }
 
     private func reconfigureSession(_ request: SNLRequestPrtcl) -> URLSession? {

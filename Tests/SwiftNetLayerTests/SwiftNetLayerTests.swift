@@ -156,16 +156,52 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    func testRawBodyPreservesBytesAndContentType() async throws {
+    func testRawBytesPreserveQueryAndUseOnlyExplicitContentType() async throws {
+        let resource = SNLResource(provider: makeProvider(), domain: "swift-net-layer.test")
+        let target = SNLTarget(resource: resource, path: "/raw?tag=a%2Bb#fragment", headers: [.custom("X-Trace"): "abc"])
+        let bytes = Data([0, 1, 128, 255])
+        for headers: SNLHeader? in [nil, [.contentType: "application/vnd.example"]] {
+            let executor = target.makeExecutor(
+                target: target, resource: resource, method: .put, requestHeaders: headers,
+                requestParams: ["tag": "c+d"], body: .raw(bytes: bytes)
+            )
+            for callback in [false, true] {
+                let request = try await capture(executor, callback: callback)
+                XCTAssertEqual(request.body, bytes)
+                XCTAssertEqual(request.contentType, headers?[.contentType])
+                XCTAssertEqual(request.headers["x-trace"], "abc")
+                XCTAssertEqual(request.queryValues("tag"), ["a+b", "c+d"])
+                XCTAssertEqual(URLComponents(string: request.url)?.fragment, "fragment")
+            }
+        }
+    }
+
+    func testDataBodyPreservesBytesAndContentType() async throws {
         let target = SNLTarget(resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test"), path: "/raw")
         let data = Data([0, 1, 128, 255])
         let executor = target.makeExecutor(
             target: target, resource: target.resource, method: .put,
-            body: .raw(data: data, contentType: SNLMIMEType.custom("application/vnd.example").rawValue)
+            body: .data(bytes: data, contentType: .custom("application/vnd.example"))
         )
         let request = try await capture(executor)
         XCTAssertEqual(request.body, data)
         XCTAssertEqual(request.contentType, "application/vnd.example")
+    }
+
+    func testNilDataSendsEmptyBytesAndKeepsContentType() async throws {
+        let target = SNLTarget(resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test"), path: "/raw")
+        let body: SNLBody? = .data(bytes: nil, contentType: .applicationJson)
+
+        for headers: SNLHeader? in [nil, [.contentType: "Application/JSON"]] {
+            let executor = target.makeExecutor(
+                target: target, resource: target.resource, method: .post, requestHeaders: headers, body: body
+            )
+            for callback in [false, true] {
+                let request = try await capture(executor, callback: callback)
+                XCTAssertEqual(request.body, Data())
+                XCTAssertEqual(request.contentType, "application/json")
+            }
+        }
     }
 
     func testContentTypeAndHeaderOverridesArePreserved() async throws {
@@ -219,16 +255,18 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
 
     func testConflictingContentTypeFailsForAsyncAndCallbackRequests() async throws {
         let target = SNLTarget(resource: SNLResource(provider: makeProvider(), domain: "swift-net-layer.test"), path: "/conflict")
-        let executor = target.makeExecutor(
-            target: target, resource: target.resource, method: .post,
-            requestHeaders: [.contentType: "text/plain"], body: .json(Payload(name: "Ada", count: 1))
-        )
-        for callback in [false, true] {
-            do {
-                _ = try await capture(executor, callback: callback)
-                XCTFail("Expected a conflicting Content-Type error")
-            } catch {
-                XCTAssertTrue(String(describing: error).contains("ConflictingContentType"))
+        for body: SNLBody in [.json(Payload(name: "Ada", count: 1)), .data(bytes: nil, contentType: "application/json")] {
+            let executor = target.makeExecutor(
+                target: target, resource: target.resource, method: .post,
+                requestHeaders: [.contentType: "text/plain"], body: body
+            )
+            for callback in [false, true] {
+                do {
+                    _ = try await capture(executor, callback: callback)
+                    XCTFail("Expected a conflicting Content-Type error")
+                } catch {
+                    XCTAssertTrue(String(describing: error).contains("ConflictingContentType"))
+                }
             }
         }
     }

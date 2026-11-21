@@ -222,11 +222,12 @@ Pass an `SNLBody` to `makeExecutor(body:)`:
 | --- | --- |
 | JSON from an `Encodable` value | `.json(CreateUserBody(name: "Ada"))` |
 | URL-encoded form | `.form(["name": "Ada"])` |
-| Raw text | `.raw("Hello", contentType: "text/plain")` |
-| Raw bytes | `.raw(data: Data([0x01, 0x02]))` |
+| UTF-8 text | `.data("Hello", contentType: .textPlain)` |
+| Bytes with a MIME type | `.data(bytes: bytes, contentType: .applicationOctetStream)` |
+| Raw bytes | `.raw(bytes: bytes)` |
 | Multipart fields and files | `.multipart([.field(name: "name", value: "Ada")])` |
 
-With the default provider, the body determines `Content-Type`; JSON does not need manual encoding or a separate content-type header. An explicitly supplied, incompatible `Content-Type` produces an error. With `body: nil`, no body or content-type header is added automatically.
+The default provider sets `Content-Type` for `.data`, `.json`, `.form`, and `.multipart`. A conflicting explicit header produces an error. With `.raw(bytes:)`, the provider leaves the header to the caller and the URL session. For a POST with bytes, `URLSession` may supply `application/x-www-form-urlencoded`. Both byte cases accept `nil` as zero bytes. Use `body: nil` to omit the body.
 
 This example creates a text attachment in memory and sends it alongside a regular multipart field:
 
