@@ -12,7 +12,7 @@ public protocol SNLExecutorPrtcl {
     var resource: SNLResourcePrtcl { get set }
     var method: SNLHTTPMethod { get set }
     var path: URL { get set }
-    var dynamicPathsParts: SNLDynamicParts? { get set }
+    var pathParams: SNLPathParams? { get set }
     var targetHeaders: SNLHeader? { get set }
     var targetParams: SNLParams? { get set }
     var requestHeaders: SNLHeader? { get set }

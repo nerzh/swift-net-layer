@@ -55,7 +55,7 @@ final class UsersTarget: SNLTarget {
             target: self,
             resource: resource,
             method: .get,
-            dynamicPathsParts: [":id": String(id)]
+            pathParams: ["id": String(id)]
         )
     }
 
@@ -155,21 +155,21 @@ Async methods report transport, body encoding, and JSON decoding errors through 
 
 The examples below reuse `api`, `User`, and `CreateUserBody` from the basic example. Calls containing `try await` belong in an async context.
 
-### Dynamic paths
+### Path parameters
 
-A path segment starting with `:` is a placeholder. Pass its value through `dynamicPathsParts` in `makeExecutor`; dictionary keys include the colon.
+A path segment starting with `:` is a placeholder. Pass its value in the `pathParams` dictionary when calling `makeExecutor`. Both `"id"` and `":id"` match the placeholder `:id`. If both keys are present, `":id"` takes precedence.
 
 For a target with `path: "/users/:id/:action"`:
 
-| `dynamicPathsParts` | Resolved path |
+| `pathParams` | Resolved path |
 | --- | --- |
 | `nil` or `[:]` | `/users` |
-| `[":id": "42"]` | `/users/42` |
-| `[":id": "42", ":action": "posts"]` | `/users/42/posts` |
-| `[":id": ""]` | `/users` |
-| `[":id": "a/b"]` | `/users/a%2Fb` |
+| `["id": "42"]` | `/users/42` |
+| `[":id": "42", "action": "posts"]` | `/users/42/posts` |
+| `["id": ""]` | `/users` |
+| `["id": "a/b"]` | `/users/a%2Fb` |
 
-Missing or empty values remove the corresponding segments. Pass unescaped values: each value is encoded as one path segment, including any `/`, `?`, or `#` characters. A static path such as `/health` needs no `dynamicPathsParts`.
+Missing or empty values remove the corresponding segments. Pass unescaped values: each value is encoded as one path segment, including any `/`, `?`, or `#` characters. A static path such as `/health` needs no `pathParams`.
 
 ### Headers and query parameters
 

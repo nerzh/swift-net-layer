@@ -26,7 +26,7 @@ public protocol SNLTargetPrtcl {
         target: SNLTargetPrtcl,
         resource: SNLResourcePrtcl,
         method: SNLHTTPMethod,
-        dynamicPathsParts: SNLDynamicParts?,
+        pathParams: SNLPathParams?,
         requestHeaders: SNLHeader?,
         requestParams: SNLParams?,
         body: SNLBody?,

@@ -13,7 +13,7 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         )
         let executor = target.makeExecutor(
             target: target, resource: target.resource, method: .get,
-            dynamicPathsParts: [":section": "a//b"]
+            pathParams: [":section": "a//b"]
         )
 
         for callback in [false, true] {
@@ -32,7 +32,7 @@ final class SwiftNetLayerTests: XCTestCase, @unchecked Sendable {
         )
         let executor = target.makeExecutor(
             target: target, resource: target.resource, method: .get,
-            dynamicPathsParts: [":id": "a/b?injected=1#part %"], requestParams: ["page": 2]
+            pathParams: ["id": "a/b?injected=1#part %"], requestParams: ["page": 2]
         )
 
         for callback in [false, true] {

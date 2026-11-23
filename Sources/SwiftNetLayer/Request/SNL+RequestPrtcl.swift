@@ -14,7 +14,7 @@ public protocol SNLRequestPrtcl {
     /// path
     var path: URL { get set }
     /// user/:id
-    var dynamicPathsParts: [String: String] { get set }
+    var pathParams: SNLPathParams { get set }
     /// HTTP_HEADER_NAME   VALUE
     var headers: SNLHeader? { get set }
     /// ?name=value

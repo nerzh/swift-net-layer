@@ -21,15 +21,15 @@ public struct SNLRequest: SNLRequestPrtcl {
     private var pathTemplate: URL
     public var path: URL {
         set { pathTemplate = newValue }
-        get { urlWithDynamicPath(path: pathTemplate) }
+        get { resolvePath(pathTemplate.absoluteString) }
     }
 
-    public var dynamicPathsParts: [String: String]
+    public var pathParams: SNLPathParams
 
     public init(
         method: SNLHTTPMethod,
         path: URL,
-        dynamicPathsParts: [String: String]?,
+        pathParams: SNLPathParams?,
         headers: SNLHeader? = nil,
         params: [String: Any]? = nil,
         hash: String? = nil,
@@ -38,7 +38,7 @@ public struct SNLRequest: SNLRequestPrtcl {
         timeoutIntervalForResource: Double? = nil
     ) {
         self.method = method
-        self.dynamicPathsParts = dynamicPathsParts ?? [:]
+        self.pathParams = pathParams ?? [:]
         self.headers = headers
         self.params = params
         self.hash = hash
@@ -48,22 +48,24 @@ public struct SNLRequest: SNLRequestPrtcl {
         self.timeoutIntervalForResource = timeoutIntervalForResource
     }
 
-    private func urlWithDynamicPath(path: URL) -> URL {
-        return replacePathsPart(path: path.absoluteString, parts: dynamicPathsParts)
-    }
-
-    private func replacePathsPart(path: String, parts: [String: String]) -> URL {
-        guard var components = URLComponents(string: path) else { fatalError("NetRequest: Bad PATH") }
+    private func resolvePath(_ template: String) -> URL {
+        guard var components = URLComponents(string: template) else { fatalError("NetRequest: Bad PATH") }
         let pathParts = components.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
         guard pathParts.contains(where: { $0.hasPrefix(":") }) else {
-            guard let url = URL(string: path) else { fatalError("NetRequest: Bad PATH") }
+            guard let url = URL(string: template) else { fatalError("NetRequest: Bad PATH") }
             return url
+        }
+
+        var valuesByPlaceholder: [String: String] = [:]
+        for (name, value) in pathParams {
+            let placeholder = name.hasPrefix(":") ? name : ":\(name)"
+            valuesByPlaceholder[placeholder] = pathParams[placeholder] ?? value
         }
 
         let resolvedParts = pathParts.compactMap { part -> String? in
             guard part.hasPrefix(":") else { return String(part) }
             let key = String(part).removingPercentEncoding ?? String(part)
-            guard let value = parts[key], !value.isEmpty else { return nil }
+            guard let value = valuesByPlaceholder[key], !value.isEmpty else { return nil }
 
             let encodedValue = Net.urlEncode(value)
             if encodedValue == "." || encodedValue == ".." {

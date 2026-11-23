@@ -3,10 +3,32 @@ import SwiftNetLayer
 import XCTest
 
 final class DynamicPathTests: XCTestCase {
+    func testOnlyPrefixedSegmentsMatchEitherKeySpelling() throws {
+        let template = try XCTUnwrap(URL(string: "/method/:method"))
+        for key in ["method", ":method"] {
+            let request = SNLRequest(method: .get, path: template, pathParams: [key: "show"])
+            XCTAssertEqual(request.path.absoluteString, "/method/show", key)
+        }
+    }
+
+    func testExplicitlyPrefixedKeyTakesPrecedence() throws {
+        var request = SNLRequest(
+            method: .get, path: try XCTUnwrap(URL(string: "/method/:method")),
+            pathParams: ["method": "list", ":method": "show"]
+        )
+        XCTAssertEqual(request.path.absoluteString, "/method/show")
+
+        request.pathParams[":method"] = ""
+        XCTAssertEqual(request.path.absoluteString, "/method")
+
+        request.pathParams.removeValue(forKey: ":method")
+        XCTAssertEqual(request.path.absoluteString, "/method/list")
+    }
+
     func testReservedCharactersStayInsideOnePathSegment() throws {
         let request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/users/:id")),
-            dynamicPathsParts: [":id": "a/b?x=1#section %"]
+            pathParams: [":id": "a/b?x=1#section %"]
         )
 
         let components = try XCTUnwrap(URLComponents(url: request.path, resolvingAgainstBaseURL: false))
@@ -19,7 +41,7 @@ final class DynamicPathTests: XCTestCase {
         let request = SNLRequest(
             method: .get,
             path: try XCTUnwrap(URL(string: "/files/a%2Fb/:id?keep=a%2Bb&literal=:id#part/:id")),
-            dynamicPathsParts: [":id": "c/d"]
+            pathParams: [":id": "c/d"]
         )
 
         XCTAssertEqual(request.path.absoluteString, "/files/a%2Fb/c%2Fd?keep=a%2Bb&literal=:id#part/:id")
@@ -28,21 +50,21 @@ final class DynamicPathTests: XCTestCase {
     func testChangingAndRemovingValuesAlwaysUsesOriginalTemplate() throws {
         var request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/users/:id/posts/:post")),
-            dynamicPathsParts: [":id": "42"]
+            pathParams: [":id": "42"]
         )
         XCTAssertEqual(request.path.absoluteString, "/users/42/posts")
 
-        request.dynamicPathsParts[":id"] = "43"
-        request.dynamicPathsParts[":post"] = "10"
+        request.pathParams[":id"] = "43"
+        request.pathParams[":post"] = "10"
         XCTAssertEqual(request.path.absoluteString, "/users/43/posts/10")
 
-        request.dynamicPathsParts.removeValue(forKey: ":id")
+        request.pathParams.removeValue(forKey: ":id")
         XCTAssertEqual(request.path.absoluteString, "/users/posts/10")
 
-        request.dynamicPathsParts = [":id": "44"]
+        request.pathParams = [":id": "44"]
         XCTAssertEqual(request.path.absoluteString, "/users/44/posts")
 
-        request.dynamicPathsParts = [:]
+        request.pathParams = [:]
         XCTAssertEqual(request.path.absoluteString, "/users/posts")
     }
 
@@ -58,7 +80,7 @@ final class DynamicPathTests: XCTestCase {
         for entry in cases {
             let request = SNLRequest(
                 method: .get, path: try XCTUnwrap(URL(string: entry.template)),
-                dynamicPathsParts: entry.parts
+                pathParams: entry.parts
             )
             XCTAssertEqual(request.path.absoluteString, entry.expected, entry.template)
         }
@@ -78,7 +100,7 @@ final class DynamicPathTests: XCTestCase {
         for entry in cases {
             let request = SNLRequest(
                 method: .get, path: try XCTUnwrap(URL(string: entry.template)),
-                dynamicPathsParts: entry.parts
+                pathParams: entry.parts
             )
             XCTAssertEqual(request.path.absoluteString, entry.expected, entry.template)
         }
@@ -88,50 +110,50 @@ final class DynamicPathTests: XCTestCase {
         var request = SNLRequest(
             method: .get,
             path: try XCTUnwrap(URL(string: "https://example.test/:id///users//:section?next=https://other.test/a//b#part//anchor")),
-            dynamicPathsParts: [":section": "a//b"]
+            pathParams: [":section": "a//b"]
         )
         XCTAssertEqual(
             request.path.absoluteString,
             "https://example.test/users/a%2F%2Fb?next=https://other.test/a//b#part//anchor"
         )
 
-        request.dynamicPathsParts[":id"] = "42"
+        request.pathParams[":id"] = "42"
         XCTAssertEqual(
             request.path.absoluteString,
             "https://example.test/42/users/a%2F%2Fb?next=https://other.test/a//b#part//anchor"
         )
 
-        request.dynamicPathsParts = [:]
+        request.pathParams = [:]
         XCTAssertEqual(request.path.absoluteString, "https://example.test/users/?next=https://other.test/a//b#part//anchor")
     }
 
     func testAssigningPathReplacesTemplate() throws {
         var request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/users/:id")),
-            dynamicPathsParts: [":id": "42"]
+            pathParams: [":id": "42"]
         )
         XCTAssertEqual(request.path.absoluteString, "/users/42")
 
         request.path = try XCTUnwrap(URL(string: "/teams/:id/:section"))
         XCTAssertEqual(request.path.absoluteString, "/teams/42")
 
-        request.dynamicPathsParts = [":id": "7", ":section": "members"]
+        request.pathParams = [":id": "7", ":section": "members"]
         XCTAssertEqual(request.path.absoluteString, "/teams/7/members")
     }
 
     func testValuesAreNotRecursivelySubstitutedOrEncodedAgainOnRead() throws {
         var request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/users/:id")),
-            dynamicPathsParts: [":id": ":other", ":other": "unexpected"]
+            pathParams: [":id": ":other", ":other": "unexpected"]
         )
         XCTAssertEqual(request.path.absoluteString, "/users/%3Aother")
         XCTAssertEqual(request.path.absoluteString, "/users/%3Aother")
 
-        request.dynamicPathsParts[":id"] = "a%2Fb"
+        request.pathParams[":id"] = "a%2Fb"
         XCTAssertEqual(request.path.absoluteString, "/users/a%252Fb")
         XCTAssertEqual(request.path.absoluteString, "/users/a%252Fb")
 
-        request.dynamicPathsParts[":id"] = "a/b"
+        request.pathParams[":id"] = "a/b"
         XCTAssertEqual(request.path.absoluteString, "/users/a%2Fb")
     }
 
@@ -139,7 +161,7 @@ final class DynamicPathTests: XCTestCase {
         for (value, expected) in [(".", "%2E"), ("..", "%2E%2E"), ("café ☕", "caf%C3%A9%20%E2%98%95")] {
             let request = SNLRequest(
                 method: .get, path: try XCTUnwrap(URL(string: "/users/:id/details")),
-                dynamicPathsParts: [":id": value]
+                pathParams: [":id": value]
             )
             XCTAssertEqual(request.path.absoluteString, "/users/\(expected)/details")
         }
@@ -148,13 +170,13 @@ final class DynamicPathTests: XCTestCase {
     func testLiteralColonsAndEncodedPlaceholderNamesRemainUnchanged() throws {
         let request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/files/a:b/%3Aid/:id")),
-            dynamicPathsParts: [":id": "42", "a:b": "unexpected"]
+            pathParams: [":id": "42", "a:b": "unexpected"]
         )
         XCTAssertEqual(request.path.absoluteString, "/files/a:b/%3Aid/42")
 
         let staticRequest = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "/files/a%2Fb?literal=/:id#/:id")),
-            dynamicPathsParts: [":id": "42"]
+            pathParams: [":id": "42"]
         )
         XCTAssertEqual(staticRequest.path.absoluteString, "/files/a%2Fb?literal=/:id#/:id")
     }
@@ -162,7 +184,7 @@ final class DynamicPathTests: XCTestCase {
     func testAbsoluteURLAndRepeatedPlaceholdersPreserveURLStructure() throws {
         let request = SNLRequest(
             method: .get, path: try XCTUnwrap(URL(string: "https://example.test/users/:id/related/:id?fixed=1#section")),
-            dynamicPathsParts: [":id": "a/b"]
+            pathParams: [":id": "a/b"]
         )
         XCTAssertEqual(request.path.absoluteString, "https://example.test/users/a%2Fb/related/a%2Fb?fixed=1#section")
     }

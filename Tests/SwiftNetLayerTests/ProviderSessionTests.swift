@@ -155,7 +155,7 @@ final class ProviderSessionTests: XCTestCase, @unchecked Sendable {
             let request = SNLRequest(
                 method: .get,
                 path: URL(string: "/session")!,
-                dynamicPathsParts: nil,
+                pathParams: nil,
                 timeoutIntervalForRequest: requestTimeout,
                 timeoutIntervalForResource: resourceTimeout
             )

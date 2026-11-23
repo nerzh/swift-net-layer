@@ -13,7 +13,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
     public var resource: SNLResourcePrtcl
     public var method: SNLHTTPMethod
     public var path: URL
-    public var dynamicPathsParts: SNLDynamicParts?
+    public var pathParams: SNLPathParams?
     public var targetHeaders: SNLHeader?
     public var targetParams: SNLParams?
     public var requestHeaders: SNLHeader?
@@ -200,7 +200,7 @@ public struct SNLExecutor: SNLExecutorPrtcl {
 
         return SNLRequest(method: method,
                           path: path,
-                          dynamicPathsParts: dynamicPathsParts,
+                          pathParams: pathParams,
                           headers: mergedHeaders,
                           params: mergedParams,
                           hash: nil,
